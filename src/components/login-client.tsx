@@ -99,21 +99,25 @@ export function LoginClient() {
       >
         <div>
           {/* Identitas portal (4:3060) */}
-          <div className="flex items-center gap-3" data-node-id="4:3060">
+          <div className="flex items-center gap-3.5" data-node-id="4:3060">
             <div
-              className="flex h-[40px] w-[40px] items-end justify-center gap-[3px] rounded-[10px] bg-white/10 pb-[9px] ring-1 ring-white/20"
+              className="relative flex h-[50px] w-[50px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#10345b] ring-2 ring-[#90dfd7]/60 shadow-md"
               data-node-id="4:3061"
             >
-              <span className="h-[12px] w-[5px] rounded-[2px] bg-[#90dfd7]" />
-              <span className="h-[22px] w-[5px] rounded-[2px] bg-white" />
-              <span className="h-[17px] w-[5px] rounded-[2px] bg-[#1557b0]" />
+              <img
+                src="/assets/logo-sigap-emblem.jpg"
+                alt="Emblem SIGAP BERAU"
+                width={50}
+                height={50}
+                className="h-full w-full scale-110 object-cover"
+              />
             </div>
             <div>
-              <p className="text-[18px] font-bold tracking-tight text-white leading-tight">
-                SIGAP BERAU
+              <p className="text-[19px] font-extrabold tracking-tight text-white leading-tight">
+                SIGAP <span className="text-[#90dfd7]">BERAU</span>
               </p>
               <p className="text-[12px] text-[#acc5df]">
-                BPS Kabupaten Berau
+                BPS Kabupaten Berau · Satu Data Indonesia
               </p>
             </div>
           </div>
@@ -138,37 +142,55 @@ export function LoginClient() {
             </p>
           </div>
 
-          {/* Visual wilayah (4:3074) */}
+          {/* Visual wilayah & Emblem SIGAP BERAU (4:3074) */}
           <div
-            className="relative mt-8 overflow-hidden rounded-[12px] border border-white/15 bg-gradient-to-br from-[#142b45] via-[#10345b] to-[#087f80]/50 p-6"
+            className="relative mt-8 overflow-hidden rounded-[12px] border border-white/15 bg-gradient-to-br from-[#142b45] via-[#10345b] to-[#087f80]/50 p-5"
             data-node-id="4:3074"
           >
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3.5">
-                <p className="text-[11px] text-[#90dfd7]">DOMAIN EPSS</p>
-                <p className="mt-1 text-2xl font-bold text-white">5 Domain</p>
-                <p className="mt-0.5 text-[11px] text-[#acc5df]">
-                  19 Aspek · 38 Indikator
-                </p>
+            <div className="flex flex-col items-center gap-5 sm:flex-row">
+              <div className="relative h-[108px] w-[108px] shrink-0 overflow-hidden rounded-full bg-[#10345b] ring-2 ring-[#90dfd7]/60 shadow-lg">
+                <img
+                  src="/assets/logo-sigap-emblem.jpg"
+                  alt="Visual Emblem SIGAP BERAU"
+                  width={108}
+                  height={108}
+                  className="h-full w-full scale-110 object-cover"
+                />
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3.5">
-                <p className="text-[11px] text-[#90dfd7]">SKALA KEMATANGAN</p>
-                <p className="mt-1 text-2xl font-bold text-white">Level 1–5</p>
-                <p className="mt-0.5 text-[11px] text-[#acc5df]">
-                  Rintisan s.d. Optimum
-                </p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3.5">
-                <p className="text-[11px] text-[#90dfd7]">TARGET IPS 2026</p>
-                <p className="mt-1 text-2xl font-bold text-white">&gt; 3,00</p>
-                <p className="mt-0.5 text-[11px] text-[#acc5df]">
-                  Predikat Baik / Memuaskan
-                </p>
+
+              <div className="grid flex-1 grid-cols-3 gap-2.5 w-full">
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <p className="text-[10px] font-semibold text-[#90dfd7]">
+                    DOMAIN EPSS
+                  </p>
+                  <p className="mt-1 text-xl font-bold text-white">5 Domain</p>
+                  <p className="mt-0.5 text-[11px] text-[#acc5df]">
+                    19 Aspek · 38 Indikator
+                  </p>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <p className="text-[10px] font-semibold text-[#90dfd7]">
+                    KEMATANGAN
+                  </p>
+                  <p className="mt-1 text-xl font-bold text-white">Level 1–5</p>
+                  <p className="mt-0.5 text-[11px] text-[#acc5df]">
+                    Rintisan s.d. Optimum
+                  </p>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <p className="text-[10px] font-semibold text-[#90dfd7]">
+                    TARGET IPS
+                  </p>
+                  <p className="mt-1 text-xl font-bold text-white">&gt; 3,00</p>
+                  <p className="mt-0.5 text-[11px] text-[#acc5df]">
+                    Predikat Baik
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-4">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[12px] text-white">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3.5">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[12px] text-white">
                 <MapPin className="h-3.5 w-3.5 text-[#90dfd7]" />
                 <span>Kabupaten Berau, Kalimantan Timur (Kode BPS: 6405)</span>
               </div>
@@ -245,8 +267,23 @@ export function LoginClient() {
           data-node-id="4:3097"
         >
           <div data-node-id="4:3098">
-            <div className="flex h-[48px] w-[48px] items-center justify-center rounded-[12px] bg-[#ebf3ff] text-[#1557b0] dark:bg-blue-950 dark:text-blue-400">
-              <ShieldCheck className="h-6 w-6" />
+            <div className="inline-flex items-center gap-3.5 rounded-[14px] border border-[#e1e8f0] bg-white p-2.5 pr-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <img
+                src="/assets/logo-sigap.jpeg"
+                alt="Logo Resmi SIGAP BERAU"
+                width={56}
+                height={56}
+                className="h-14 w-14 rounded-[10px] object-contain bg-white"
+              />
+              <div>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-[#087f80] dark:text-teal-400">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  PORTAL RESMI BPS BERAU
+                </span>
+                <p className="text-[15px] font-extrabold tracking-tight text-[#10345b] dark:text-white">
+                  SIGAP <span className="text-[#087f80]">BERAU</span>
+                </p>
+              </div>
             </div>
             <h2 className="mt-4 text-[26px] font-bold tracking-tight text-[#142b45] dark:text-white">
               Masuk ke Portal SIGAP

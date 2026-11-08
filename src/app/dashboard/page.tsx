@@ -189,25 +189,36 @@ export default async function DashboardOverviewPage({
 
       {/* Role-Specific Quick Action Banner */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-[12px] bg-[#10345b] p-6 text-white shadow-sm">
-        <div className="max-w-2xl space-y-1.5">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-[#90dfd7]">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>
-              {activePeriod?.label || `Evaluasi EPSS Tahun ${selectedYear}`}
-            </span>
+        <div className="flex items-center gap-4 max-w-2xl">
+          <div className="hidden sm:flex h-[68px] w-[68px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#10345b] ring-2 ring-[#90dfd7]/60 shadow-md">
+            <img
+              src="/assets/logo-sigap-emblem.jpg"
+              alt="Emblem SIGAP BERAU"
+              width={68}
+              height={68}
+              className="h-full w-full scale-110 object-cover"
+            />
           </div>
-          <h2 className="text-[20px] font-bold text-white">
-            {effectiveUser.role === "OPERATOR_OPD"
-              ? `Kelola Bukti Dukung EPSS — ${effectiveUser.opdName}`
-              : effectiveUser.role === "PEMBINA_SEKTORAL"
-              ? "Panel Pemeriksaan & Penilaian Kematangan EPSS Seluruh OPD"
-              : "Panel Kendali Superadmin & Impersonasi Lintas Peran"}
-          </h2>
-          <p className="text-[13px] text-[#acc5df]">
-            {effectiveUser.role === "OPERATOR_OPD"
-              ? "Unggah dokumen bukti dukung (.pdf, .zip, .docx maks. 10MB) untuk 38 indikator resmi beserta narasi Simbatik (i)-(ii)-(iii)."
-              : "Tinjau progres pengajuan seluruh OPD Kabupaten Berau, buka pratinjau PDF bukti dukung, dan tetapkan skor Tingkat Kematangan (Level 1–5)."}
-          </p>
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-[#90dfd7]">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>
+                {activePeriod?.label || `Evaluasi EPSS Tahun ${selectedYear}`}
+              </span>
+            </div>
+            <h2 className="text-[20px] font-bold text-white">
+              {effectiveUser.role === "OPERATOR_OPD"
+                ? `Kelola Bukti Dukung EPSS — ${effectiveUser.opdName}`
+                : effectiveUser.role === "PEMBINA_SEKTORAL"
+                ? "Panel Pemeriksaan & Penilaian Kematangan EPSS Seluruh OPD"
+                : "Panel Kendali Superadmin & Impersonasi Lintas Peran"}
+            </h2>
+            <p className="text-[13px] text-[#acc5df]">
+              {effectiveUser.role === "OPERATOR_OPD"
+                ? "Unggah dokumen bukti dukung (.pdf, .zip, .docx maks. 10MB) untuk 38 indikator resmi beserta narasi Simbatik (i)-(ii)-(iii)."
+                : "Tinjau progres pengajuan seluruh OPD Kabupaten Berau, buka pratinjau PDF bukti dukung, dan tetapkan skor Tingkat Kematangan (Level 1–5)."}
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

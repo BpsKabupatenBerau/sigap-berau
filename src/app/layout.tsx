@@ -19,6 +19,10 @@ export const metadata: Metadata = {
     "SIGAP BERAU — Sistem Pembinaan Statistik Sektoral Terintegrasi | BPS Kabupaten Berau",
   description:
     "Portal Sistem Pembinaan Statistik Sektoral yang Terintegrasi untuk Akselerasi Pembangunan Kabupaten Berau (Badan Pusat Statistik Kabupaten Berau).",
+  icons: {
+    icon: "/assets/logo-sigap-emblem.jpg",
+    apple: "/assets/logo-sigap-emblem.jpg",
+  },
 };
 
 export default function RootLayout({

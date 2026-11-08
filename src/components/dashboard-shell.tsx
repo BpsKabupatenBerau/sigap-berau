@@ -180,17 +180,21 @@ export function DashboardShell({
               className="flex items-center gap-3 overflow-hidden"
             >
               <div
-                className="flex h-[40px] w-[40px] shrink-0 items-end justify-center gap-[3px] rounded-[10px] bg-white/10 pb-[9px] ring-1 ring-white/20"
+                className="relative flex h-[44px] w-[44px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#10345b] ring-2 ring-[#90dfd7]/50 shadow-sm"
                 data-node-id="4:3633"
               >
-                <span className="h-[12px] w-[5px] rounded-[2px] bg-[#90dfd7]" />
-                <span className="h-[22px] w-[5px] rounded-[2px] bg-white" />
-                <span className="h-[17px] w-[5px] rounded-[2px] bg-[#1557b0]" />
+                <img
+                  src="/assets/logo-sigap-emblem.jpg"
+                  alt="Logo SIGAP BERAU"
+                  width={44}
+                  height={44}
+                  className="h-full w-full scale-110 object-cover"
+                />
               </div>
               {!collapsed && (
                 <div className="min-w-0" data-node-id="4:3637">
-                  <p className="truncate text-[16px] font-bold tracking-tight text-white">
-                    SIGAP BERAU
+                  <p className="truncate text-[16px] font-extrabold tracking-tight text-white">
+                    SIGAP <span className="text-[#90dfd7]">BERAU</span>
                   </p>
                   <p className="truncate text-[11px] text-[#acc5df]">
                     BPS Kabupaten Berau
