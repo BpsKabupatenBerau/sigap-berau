@@ -17,8 +17,14 @@ export default async function EpssMainPage({
   const selectedYear = Number(params.year || 2026);
   const { effectiveUser } = session;
 
+  // Operator OPD hanya dapat mengakses instansi OPD miliknya sendiri
+  const resolvedOpdId =
+    effectiveUser.role === "OPERATOR_OPD"
+      ? effectiveUser.opdId || undefined
+      : params.opdId;
+
   const data = await loadEpssWorkspaceData({
-    requestedOpdId: params.opdId,
+    requestedOpdId: resolvedOpdId,
     defaultOpdId: effectiveUser.opdId,
     periodYear: selectedYear,
   });

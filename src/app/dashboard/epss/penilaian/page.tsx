@@ -38,17 +38,11 @@ export default async function EpssPenilaianPage({
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link
-            href="/dashboard/epss/upload"
+            href="/dashboard/epss"
             className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white hover:bg-[#142b45]"
           >
-            <span>Ke Halaman Unggah Bukti OPD</span>
-          </Link>
-          <Link
-            href="/dashboard/epss"
-            className="inline-flex h-[42px] items-center gap-2 rounded-[8px] border border-[#e1e8f0] px-4 text-[13px] font-semibold text-[#142b45]"
-          >
             <ArrowLeft className="h-4 w-4" />
-            <span>Kembali</span>
+            <span>Kembali ke Penilaian EPSS</span>
           </Link>
         </div>
       </div>

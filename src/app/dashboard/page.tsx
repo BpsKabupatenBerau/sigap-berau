@@ -101,8 +101,13 @@ export default async function DashboardOverviewPage({
       ? Math.round((filledCount / expectedTotalSubmissions) * 100)
       : 0;
 
-  // Calculate per-OPD progress summary
-  const opdProgressList = opds.map((opd) => {
+  // Calculate per-OPD progress summary (Operator OPD hanya melihat instansinya sendiri)
+  const visibleOpds =
+    effectiveUser.role === "OPERATOR_OPD" && effectiveUser.opdId
+      ? opds.filter((o) => o.id === effectiveUser.opdId)
+      : opds;
+
+  const opdProgressList = visibleOpds.map((opd) => {
     const opdSubs = submissions.filter((s) => s.opdId === opd.id);
     const filled = opdSubs.filter((s) => s.status !== "BELUM_DIISI").length;
     const verified = opdSubs.filter((s) => s.status === "TERVERIFIKASI").length;
@@ -208,28 +213,30 @@ export default async function DashboardOverviewPage({
         <div className="flex flex-wrap items-center gap-3">
           {effectiveUser.role === "OPERATOR_OPD" ? (
             <Link
-              href={`/dashboard/epss/upload?year=${selectedYear}`}
+              href={`/dashboard/epss?year=${selectedYear}`}
               className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-white px-4 text-[13px] font-semibold text-[#142b45] hover:bg-slate-100"
             >
               <FileUp className="h-4 w-4 text-[#1557b0]" />
-              <span>Unggah Bukti Dukung</span>
+              <span>Buka Penilaian & Unggah Bukti EPSS</span>
             </Link>
           ) : (
-            <Link
-              href={`/dashboard/epss/penilaian?year=${selectedYear}`}
-              className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-white px-4 text-[13px] font-semibold text-[#142b45] hover:bg-slate-100"
-            >
-              <CheckSquare className="h-4 w-4 text-[#087f80]" />
-              <span>Mulai Penilaian OPD</span>
-            </Link>
+            <>
+              <Link
+                href={`/dashboard/epss/penilaian?year=${selectedYear}`}
+                className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-white px-4 text-[13px] font-semibold text-[#142b45] hover:bg-slate-100"
+              >
+                <CheckSquare className="h-4 w-4 text-[#087f80]" />
+                <span>Mulai Penilaian OPD</span>
+              </Link>
+              <Link
+                href={`/dashboard/epss?year=${selectedYear}`}
+                className="inline-flex h-[42px] items-center gap-2 rounded-[8px] border border-white/25 bg-white/10 px-4 text-[13px] font-semibold text-white hover:bg-white/20"
+              >
+                <span>Tabel 38 Indikator EPSS</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </>
           )}
-          <Link
-            href={`/dashboard/epss?year=${selectedYear}`}
-            className="inline-flex h-[42px] items-center gap-2 rounded-[8px] border border-white/25 bg-white/10 px-4 text-[13px] font-semibold text-white hover:bg-white/20"
-          >
-            <span>Tabel 38 Indikator EPSS</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
       </div>
 
@@ -408,22 +415,13 @@ export default async function DashboardOverviewPage({
                   </td>
                   <td className="px-5 py-4 text-right">
                     {effectiveUser.role === "OPERATOR_OPD" ? (
-                      effectiveUser.opdId === opd.id ? (
-                        <Link
-                          href={`/dashboard/epss/upload?year=${selectedYear}`}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#10345b] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#142b45]"
-                        >
-                          <FileUp className="h-3.5 w-3.5" />
-                          <span>Kelola Bukti</span>
-                        </Link>
-                      ) : (
-                        <Link
-                          href={`/dashboard/epss?opdId=${opd.id}&year=${selectedYear}`}
-                          className="text-[12px] font-semibold text-[#1557b0] hover:underline dark:text-blue-400"
-                        >
-                          Lihat Progres
-                        </Link>
-                      )
+                      <Link
+                        href={`/dashboard/epss?year=${selectedYear}`}
+                        className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#10345b] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#142b45]"
+                      >
+                        <FileUp className="h-3.5 w-3.5" />
+                        <span>Penilaian & Unggah Bukti</span>
+                      </Link>
                     ) : (
                       <Link
                         href={`/dashboard/epss/penilaian?opdId=${opd.id}&year=${selectedYear}`}

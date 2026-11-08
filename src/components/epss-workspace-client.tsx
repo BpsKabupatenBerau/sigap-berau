@@ -208,6 +208,7 @@ export function EpssWorkspaceClient({
   }
 
   function handleOpdChange(newOpdId: string) {
+    if (effectiveRole === "OPERATOR_OPD") return;
     router.push(`${basePath}?opdId=${newOpdId}&year=${selectedYear}`);
   }
 
@@ -472,15 +473,15 @@ export function EpssWorkspaceClient({
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#087f80] dark:text-teal-400">
             {mode === "penilaian"
               ? "PANEL PEMERIKSAAN PEMBINA SEKTORAL BPS"
-              : mode === "upload"
-              ? "PANEL UNGGAH BUKTI DUKUNG OPERATOR OPD"
+              : effectiveRole === "OPERATOR_OPD"
+              ? `PENILAIAN EPSS & UNGGAH BUKTI DUKUNG — ${selectedOpd.shortName}`
               : "EVALUASI PENYELENGGARAAN STATISTIK SEKTORAL (EPSS)"}
           </p>
           <h1 className="mt-1 text-[26px] font-bold tracking-tight text-[#142b45] dark:text-white">
             {mode === "penilaian"
               ? `Pemeriksaan & Penilaian Kematangan EPSS (${selectedYear})`
-              : mode === "upload"
-              ? `Unggah & Kelola Bukti Dukung EPSS — ${selectedOpd.shortName}`
+              : effectiveRole === "OPERATOR_OPD"
+              ? `Penilaian EPSS & Bukti Dukung — ${selectedOpd.shortName} (${selectedYear})`
               : `Penilaian EPSS — Persiapan Bukti & Evaluasi (${selectedYear})`}
           </h1>
           <p className="mt-1 text-[14px] text-slate-600 dark:text-slate-400">
@@ -507,16 +508,6 @@ export function EpssWorkspaceClient({
             >
               <CheckSquare className="h-4 w-4" />
               <span>Mode Penilaian Pembina</span>
-            </Link>
-          )}
-
-          {mode !== "upload" && canUpload && (
-            <Link
-              href={`/dashboard/epss/upload?opdId=${selectedOpd.id}&year=${selectedYear}`}
-              className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white hover:bg-[#142b45]"
-            >
-              <Upload className="h-4 w-4" />
-              <span>Mode Unggah OPD</span>
             </Link>
           )}
         </div>
@@ -651,19 +642,31 @@ export function EpssWorkspaceClient({
             ))}
           </select>
 
-          {/* OPD selector (4:3705) */}
-          <select
-            value={selectedOpd.id}
-            onChange={(e) => handleOpdChange(e.target.value)}
-            className="h-[42px] rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] px-3.5 text-[13px] font-semibold text-[#142b45] focus:border-[#1557b0] focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-            data-node-id="4:3705"
-          >
-            {allOpdSummaries.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name} ({o.completionPct}%)
-              </option>
-            ))}
-          </select>
+          {/* OPD selector (4:3705): Hanya Pembina BPS & Superadmin yang dapat berpindah OPD */}
+          {effectiveRole === "OPERATOR_OPD" ? (
+            <div
+              className="inline-flex h-[42px] items-center gap-2 rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] px-3.5 text-[13px] font-semibold text-[#142b45] dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              data-node-id="4:3705"
+            >
+              <Building2 className="h-4 w-4 text-[#1557b0]" />
+              <span>
+                {selectedOpd.name} ({selectedOpd.completionPct}%)
+              </span>
+            </div>
+          ) : (
+            <select
+              value={selectedOpd.id}
+              onChange={(e) => handleOpdChange(e.target.value)}
+              className="h-[42px] rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] px-3.5 text-[13px] font-semibold text-[#142b45] focus:border-[#1557b0] focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              data-node-id="4:3705"
+            >
+              {allOpdSummaries.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} ({o.completionPct}%)
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5" data-node-id="4:3708">
@@ -936,7 +939,7 @@ export function EpssWorkspaceClient({
           <Clock3 className="h-3.5 w-3.5 text-[#087f80]" />
           <span>
             Pembaruan bukti dukung dan skor kematangan disimpan secara waktu
-            nyata (real-time) pada basis data SQLite SIGAP BERAU.
+            nyata (real-time) pada basis data PostgreSQL SIGAP BERAU.
           </span>
         </div>
       </div>

@@ -120,15 +120,6 @@ export function DashboardShell({
         effectiveUser.role === "SUPERADMIN",
     },
     {
-      href: "/dashboard/epss/upload",
-      label: "Unggah Bukti OPD",
-      icon: FileUp,
-      exact: false,
-      show:
-        effectiveUser.role === "OPERATOR_OPD" ||
-        effectiveUser.role === "SUPERADMIN",
-    },
-    {
       href: "/dashboard/users",
       label: "Manajemen Pengguna",
       icon: Users,
