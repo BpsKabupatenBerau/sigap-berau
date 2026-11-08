@@ -8,40 +8,45 @@ datasource db {
 }
 
 model Opd {
-  id             String             @id @default(cuid())
-  code           String             @unique
-  name           String
-  shortName      String
-  category       String             @default("Dinas Daerah")
-  address        String?
-  phone          String?
-  email          String?
-  activity1Name  String?
-  activity2Name  String?
-  users          User[]
-  submissions    EpssSubmission[]
-  schedules      CoachingSchedule[]
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  id                  String               @id @default(cuid())
+  code                String               @unique
+  name                String
+  shortName           String
+  category            String               @default("Dinas Daerah")
+  address             String?
+  phone               String?
+  email               String?
+  activity1Name       String?
+  activity2Name       String?
+  users               User[]
+  submissions         EpssSubmission[]
+  schedules           CoachingSchedule[]
+  targetedAssessments Assessment[]         @relation("TargetOpd")
+  assessmentResponses AssessmentResponse[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 }
 
 model User {
-  id                String              @id @default(cuid())
-  name              String
-  email             String              @unique
-  nip               String?
-  passwordHash      String
-  role              String              @default("OPERATOR_OPD") // SUPERADMIN | PEMBINA_SEKTORAL | OPERATOR_OPD
-  jabatan           String?
-  phone             String?
-  isActive          Boolean             @default(true)
-  opdId             String?
-  opd               Opd?                @relation(fields: [opdId], references: [id], onDelete: SetNull)
-  uploadedDocs      EpssDocument[]
-  reviewedSubmits   EpssSubmission[]    @relation("ReviewedBy")
-  reviewComments    EpssReviewComment[]
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  nip                 String?
+  passwordHash        String
+  role                String               @default("OPERATOR_OPD") // SUPERADMIN | PEMBINA_SEKTORAL | OPERATOR_OPD
+  jabatan             String?
+  phone               String?
+  isActive            Boolean              @default(true)
+  opdId               String?
+  opd                 Opd?                 @relation(fields: [opdId], references: [id], onDelete: SetNull)
+  uploadedDocs        EpssDocument[]
+  reviewedSubmits     EpssSubmission[]     @relation("ReviewedBy")
+  reviewComments      EpssReviewComment[]
+  createdAssessments  Assessment[]         @relation("AssessmentAuthor")
+  submittedResponses  AssessmentResponse[] @relation("ResponseSubmitter")
+  reviewedResponses   AssessmentResponse[] @relation("ResponseReviewer")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 }
 
 model EpssPeriod {
@@ -183,5 +188,76 @@ model LearningMaterial {
   publishedLabel String   @default("Jan 2026")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model Assessment {
+  id          String               @id @default(cuid())
+  title       String
+  description String
+  category    String               @default("Diagnostik Pra-EPSS") // Diagnostik Pra-EPSS | Kesiapan Metadata & Romantik | Evaluasi Pasca-Pembinaan
+  periodYear  Int                  @default(2026)
+  status      String               @default("AKTIF") // DRAF | AKTIF | DITUTUP
+  dueDate     DateTime
+  targetOpdId String?              // null = Semua OPD, atau ID OPD tertentu
+  targetOpd   Opd?                 @relation("TargetOpd", fields: [targetOpdId], references: [id], onDelete: SetNull)
+  createdById String?
+  createdBy   User?                @relation("AssessmentAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  questions   AssessmentQuestion[]
+  responses   AssessmentResponse[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+}
+
+model AssessmentQuestion {
+  id           String             @id @default(cuid())
+  assessmentId String
+  assessment   Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  order        Int
+  domainCode   String             @default("Domain 1") // Domain 1..5 atau Umum
+  indicatorRef String?            // e.g. "10101"
+  questionText String
+  helpText     String?
+  questionType String             @default("SCALE_1_5") // SCALE_1_5 | YES_NO | TEXT
+  weight       Float              @default(1)
+  answers      AssessmentAnswer[]
+}
+
+model AssessmentResponse {
+  id              String             @id @default(cuid())
+  assessmentId    String
+  assessment      Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  opdId           String
+  opd             Opd                @relation(fields: [opdId], references: [id], onDelete: Cascade)
+  submittedById   String?
+  submittedBy     User?              @relation("ResponseSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  status          String             @default("DRAF") // DRAF | DIKIRIM | DIREVIU
+  readinessScore  Float?             // Skor rata-rata kesiapan skala 1.00 - 5.00
+  readinessPct    Int?               // Persentase kesiapan 0 - 100%
+  summaryNotes    String?            // Catatan kendala umum dari Operator OPD
+  pembinaFeedback String?            // Rekomendasi & tindak lanjut dari Pembina BPS
+  reviewedById    String?
+  reviewedBy      User?              @relation("ResponseReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  submittedAt     DateTime?
+  reviewedAt      DateTime?
+  answers         AssessmentAnswer[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([assessmentId, opdId])
+}
+
+model AssessmentAnswer {
+  id           String             @id @default(cuid())
+  responseId   String
+  response     AssessmentResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  scaleValue   Int?               // 1..5 untuk SCALE_1_5
+  yesNoValue   String?            // "YA" | "TIDAK" untuk YES_NO
+  textAnswer   String?            // Penjelasan / bukti pendukung / uraian kendala
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([responseId, questionId])
 }
 

@@ -8,8 +8,7 @@ import {
   CalendarDays,
   Library,
   ClipboardCheck,
-  FileUp,
-  CheckSquare,
+  ClipboardList,
   Users,
   Headset,
   ArrowUpRight,
@@ -27,7 +26,17 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { ActiveSession, getRoleLabel } from "@/lib/roles";
-import { cn } from "@/lib/utils";
+import { cn, formatDateId } from "@/lib/utils";
+
+export interface NotificationItem {
+  id: string;
+  type: "EPSS_SUBMISSION" | "ASSESSMENT_SUBMISSION";
+  title: string;
+  description: string;
+  opdShortName: string;
+  href: string;
+  createdAt: string;
+}
 
 interface ImpersonationCandidate {
   id: string;
@@ -40,10 +49,12 @@ interface ImpersonationCandidate {
 export function DashboardShell({
   session,
   impersonationCandidates,
+  notifications = [],
   children,
 }: {
   session: ActiveSession;
   impersonationCandidates: ImpersonationCandidate[];
+  notifications?: NotificationItem[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -51,6 +62,19 @@ export function DashboardShell({
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [switchingRole, setSwitchingRole] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const [notifFilter, setNotifFilter] = React.useState<
+    "ALL" | "EPSS_SUBMISSION" | "ASSESSMENT_SUBMISSION"
+  >("ALL");
+  const [readIds, setReadIds] = React.useState<string[]>([]);
+
+  const unreadCount = notifications.filter(
+    (n) => !readIds.includes(n.id)
+  ).length;
+
+  const filteredNotifications = notifications.filter(
+    (n) => notifFilter === "ALL" || n.type === notifFilter
+  );
 
   const { realUser, effectiveUser, isImpersonating } = session;
 
@@ -100,6 +124,13 @@ export function DashboardShell({
       href: "/dashboard/materi",
       label: "Kumpulan Materi",
       icon: Library,
+      exact: false,
+      show: true,
+    },
+    {
+      href: "/dashboard/asesmen",
+      label: "Asesmen Kesiapan",
+      icon: ClipboardList,
       exact: false,
       show: true,
     },
@@ -407,14 +438,170 @@ export function DashboardShell({
 
             <ThemeToggle />
 
-            <Link
-              href="/dashboard/epss"
-              className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#10345b] dark:text-slate-400 dark:hover:bg-slate-800"
-              title="Pemberitahuan Evaluasi EPSS"
-            >
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#087f80]" />
-            </Link>
+            {/* Notification Bell Popover for EPSS Submissions & Assessment Submissions */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setNotifOpen(!notifOpen)}
+                className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#10345b] dark:text-slate-400 dark:hover:bg-slate-800"
+                title="Notifikasi Pengajuan Penilaian EPSS & Asesmen OPD"
+                aria-label="Buka panel notifikasi"
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#087f80] px-1 text-[10px] font-bold text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setNotifOpen(false)}
+                  />
+                  <div className="absolute right-0 top-12 z-50 w-[340px] sm:w-[400px] overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
+                    <div className="flex items-center justify-between border-b border-[#e1e8f0] bg-[#10345b] px-4 py-3 text-white">
+                      <div>
+                        <p className="text-[13px] font-bold">
+                          Notifikasi Pengajuan OPD
+                        </p>
+                        <p className="text-[11px] text-[#90dfd7]">
+                          Submit Penilaian EPSS & Asesmen Kesiapan
+                        </p>
+                      </div>
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReadIds(notifications.map((n) => n.id))
+                          }
+                          className="rounded bg-white/10 px-2 py-1 text-[11px] font-medium text-white hover:bg-white/20"
+                        >
+                          Tandai Dibaca
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex items-center gap-1.5 border-b border-[#e1e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] dark:border-slate-800 dark:bg-slate-800/60">
+                      {[
+                        { key: "ALL", label: "Semua" },
+                        { key: "EPSS_SUBMISSION", label: "Penilaian EPSS" },
+                        { key: "ASSESSMENT_SUBMISSION", label: "Asesmen OPD" },
+                      ].map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() =>
+                            setNotifFilter(
+                              tab.key as
+                                | "ALL"
+                                | "EPSS_SUBMISSION"
+                                | "ASSESSMENT_SUBMISSION"
+                            )
+                          }
+                          className={`rounded-md px-2.5 py-1 font-semibold transition ${
+                            notifFilter === tab.key
+                              ? "bg-[#10345b] text-white dark:bg-blue-600"
+                              : "text-slate-600 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-700"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="max-h-[340px] divide-y divide-[#e1e8f0] overflow-y-auto dark:divide-slate-800">
+                      {filteredNotifications.length > 0 ? (
+                        filteredNotifications.map((item) => {
+                          const isUnread = !readIds.includes(item.id);
+                          return (
+                            <Link
+                              key={item.id}
+                              href={item.href}
+                              onClick={() => {
+                                if (!readIds.includes(item.id)) {
+                                  setReadIds((prev) => [...prev, item.id]);
+                                }
+                                setNotifOpen(false);
+                              }}
+                              className={`flex items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/60 ${
+                                isUnread
+                                  ? "bg-[#ebf3ff]/35 dark:bg-blue-950/20"
+                                  : ""
+                              }`}
+                            >
+                              <div
+                                className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                                  item.type === "EPSS_SUBMISSION"
+                                    ? "bg-[#ebf3ff] text-[#1557b0] dark:bg-blue-950 dark:text-blue-300"
+                                    : "bg-teal-50 text-[#087f80] dark:bg-teal-950 dark:text-teal-300"
+                                }`}
+                              >
+                                {item.type === "EPSS_SUBMISSION" ? (
+                                  <ClipboardCheck className="h-4 w-4" />
+                                ) : (
+                                  <ClipboardList className="h-4 w-4" />
+                                )}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <Badge
+                                    variant={
+                                      item.type === "EPSS_SUBMISSION"
+                                        ? "secondary"
+                                        : "teal"
+                                    }
+                                    className="px-1.5 py-0 text-[10px]"
+                                  >
+                                    {item.type === "EPSS_SUBMISSION"
+                                      ? "Penilaian EPSS"
+                                      : "Asesmen OPD"}
+                                  </Badge>
+                                  <span className="text-[10px] text-slate-400">
+                                    {formatDateId(item.createdAt)}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-[12px] font-bold text-[#142b45] dark:text-white">
+                                  {item.title}
+                                </p>
+                                <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                  {item.description}
+                                </p>
+                              </div>
+                            </Link>
+                          );
+                        })
+                      ) : (
+                        <div className="px-4 py-8 text-center text-[12px] text-slate-500">
+                          Belum ada notifikasi pengajuan baru pada kategori ini.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-[#e1e8f0] bg-[#f8fafc] px-4 py-2.5 text-[11px] font-semibold dark:border-slate-800 dark:bg-slate-800/40">
+                      <Link
+                        href="/dashboard/epss"
+                        onClick={() => setNotifOpen(false)}
+                        className="text-[#1557b0] hover:underline dark:text-blue-400"
+                      >
+                        Ke Penilaian EPSS →
+                      </Link>
+                      <Link
+                        href="/dashboard/asesmen"
+                        onClick={() => setNotifOpen(false)}
+                        className="text-[#087f80] hover:underline dark:text-teal-400"
+                      >
+                        Ke Asesmen OPD →
+                      </Link>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="hidden h-7 w-[1px] bg-[#e1e8f0] sm:block dark:bg-slate-700" />
 
