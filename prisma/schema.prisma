@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Opd {
+  id             String             @id @default(cuid())
+  code           String             @unique
+  name           String
+  shortName      String
+  category       String             @default("Dinas Daerah")
+  address        String?
+  phone          String?
+  email          String?
+  activity1Name  String?
+  activity2Name  String?
+  users          User[]
+  submissions    EpssSubmission[]
+  schedules      CoachingSchedule[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model User {
+  id                String              @id @default(cuid())
+  name              String
+  email             String              @unique
+  nip               String?
+  passwordHash      String
+  role              String              @default("OPERATOR_OPD") // SUPERADMIN | PEMBINA_SEKTORAL | OPERATOR_OPD
+  jabatan           String?
+  phone             String?
+  isActive          Boolean             @default(true)
+  opdId             String?
+  opd               Opd?                @relation(fields: [opdId], references: [id], onDelete: SetNull)
+  uploadedDocs      EpssDocument[]
+  reviewedSubmits   EpssSubmission[]    @relation("ReviewedBy")
+  reviewComments    EpssReviewComment[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model EpssPeriod {
+  id          String   @id @default(cuid())
+  year        Int      @unique
+  label       String
+  stage       String   @default("Tahap Penilaian Mandiri & Unggah Bukti")
+  status      String   @default("AKTIF") // AKTIF | SELESAI | PERSIAPAN
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(false)
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model EpssDomain {
+  id          String       @id @default(cuid())
+  code        String       @unique // "1", "2", "3", "4", "5"
+  name        String
+  weight      Float        // 28, 24, 19, 17, 12
+  description String?
+  aspects     EpssAspect[]
+}
+
+model EpssAspect {
+  id         String          @id @default(cuid())
+  code       String          @unique // "101" .. "503"
+  name       String
+  weight     Float
+  domainId   String
+  domain     EpssDomain      @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  indicators EpssIndicator[]
+}
+
+model EpssIndicator {
+  id             String           @id @default(cuid())
+  code           String           @unique // "10101" .. "50303" (38 indicators)
+  name           String
+  weight         Float            // Weight within aspect (%)
+  totalWeight    Float            // Effective weight in total IPS (%)
+  aspectId       String
+  aspect         EpssAspect       @relation(fields: [aspectId], references: [id], onDelete: Cascade)
+  level1Criteria String
+  level2Criteria String
+  level3Criteria String
+  level4Criteria String
+  level5Criteria String
+  notes          String?
+  submissions    EpssSubmission[]
+}
+
+model EpssSubmission {
+  id            String              @id @default(cuid())
+  opdId         String
+  opd           Opd                 @relation(fields: [opdId], references: [id], onDelete: Cascade)
+  indicatorId   String
+  indicator     EpssIndicator       @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  periodYear    Int                 @default(2026)
+  targetLevel   Int                 @default(3)
+  selfScore     Int?                // 1..5 self assessment by OPD
+  maturityScore Int?                // 1..5 official score by Pembina Sektoral BPS
+  narrative     String?             // (i) Relevansi & ringkasan, (ii) Nama file, (iii) Halaman
+  pageReference String?
+  status        String              @default("BELUM_DIISI") // BELUM_DIISI | DRAF | MENUNGGU_PERIKSA | REVISI | TERVERIFIKASI
+  reviewerNotes String?
+  reviewedById  String?
+  reviewedBy    User?               @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  documents     EpssDocument[]
+  comments      EpssReviewComment[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([opdId, indicatorId, periodYear])
+}
+
+model EpssDocument {
+  id           String         @id @default(cuid())
+  submissionId String
+  submission   EpssSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  fileName     String
+  originalName String
+  filePath     String         // e.g. /uploads/epss/2026/...
+  mimeType     String
+  fileSize     Int
+  targetLevel  Int            @default(2)
+  pageNumber   String?
+  description  String?
+  uploadedById String?
+  uploadedBy   User?          @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+}
+
+model EpssReviewComment {
+  id           String         @id @default(cuid())
+  submissionId String
+  submission   EpssSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  scoreGiven   Int?
+  statusAction String?
+  comment      String
+  createdAt    DateTime       @default(now())
+}
+
+model CoachingSchedule {
+  id          String   @id @default(cuid())
+  title       String
+  topic       String
+  description String?
+  date        DateTime
+  startTime   String
+  endTime     String
+  location    String
+  mode        String   @default("TATAP_MUKA") // TATAP_MUKA | DARING | HIBRIDA
+  status      String   @default("TERJADWAL")  // TERJADWAL | BERLANGSUNG | SELESAI | DITUNDA
+  opdId       String?
+  opd         Opd?     @relation(fields: [opdId], references: [id], onDelete: SetNull)
+  pembinaName String
+  participants Int     @default(15)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LearningMaterial {
+  id             String   @id @default(cuid())
+  title          String
+  category       String   // Panduan EPSS | Regulasi & Kebijakan | Standar Data & Metadata | Template & Instrumen | Materi Sosialisasi | Video Pembinaan
+  format         String   // PDF | DOCX | XLSX | PPTX | VIDEO | ZIP
+  fileSize       String
+  fileUrl        String
+  targetAudience String   @default("Semua OPD")
+  domainCode     String?
+  isFeatured     Boolean  @default(false)
+  description    String
+  author         String   @default("Tim Pembina Statistik Sektoral BPS Kab. Berau")
+  downloadCount  Int      @default(0)
+  publishedLabel String   @default("Jan 2026")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
