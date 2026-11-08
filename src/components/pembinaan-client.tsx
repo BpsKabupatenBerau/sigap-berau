@@ -10,6 +10,7 @@ import {
   Download,
   List,
   Search,
+  ChevronLeft,
   ChevronRight,
   Plus,
   MapPin,
@@ -19,6 +20,64 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDateId } from "@/lib/utils";
+
+const MONTH_NAMES_ID = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+
+const MONTH_SHORT_ID = [
+  "JAN",
+  "FEB",
+  "MAR",
+  "APR",
+  "MEI",
+  "JUN",
+  "JUL",
+  "AGU",
+  "SEP",
+  "OKT",
+  "NOV",
+  "DES",
+];
+
+// Monday-first day names for calendar grid header
+const WEEKDAY_HEADERS_ID = [
+  { short: "Sen", full: "Senin", isWeekend: false },
+  { short: "Sel", full: "Selasa", isWeekend: false },
+  { short: "Rab", full: "Rabu", isWeekend: false },
+  { short: "Kam", full: "Kamis", isWeekend: false },
+  { short: "Jum", full: "Jumat", isWeekend: false },
+  { short: "Sab", full: "Sabtu", isWeekend: true },
+  { short: "Min", full: "Minggu", isWeekend: true },
+];
+
+// JS getUTCDay() is 0=Minggu .. 6=Sabtu
+const UTC_DAY_NAMES_ID = [
+  "Minggu",
+  "Senin",
+  "Selasa",
+  "Rabu",
+  "Kamis",
+  "Jumat",
+  "Sabtu",
+];
+
+function getDayNameId(dateInput: Date | string): string {
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  if (Number.isNaN(d.getTime())) return "";
+  return UTC_DAY_NAMES_ID[d.getUTCDay()] || "";
+}
 
 export interface ScheduleItem {
   id: string;
@@ -107,6 +166,62 @@ export function PembinaanClient({
   const nearestSchedule =
     schedules.find((s) => s.status === "TERJADWAL") || schedules[0];
 
+  // Determine default calendar month & year from nearest schedule (or Nov 2026)
+  const initialDateObj = nearestSchedule
+    ? new Date(nearestSchedule.date)
+    : new Date("2026-11-01T00:00:00.000Z");
+
+  const [calendarYear, setCalendarYear] = React.useState<number>(
+    Number.isNaN(initialDateObj.getTime())
+      ? 2026
+      : initialDateObj.getUTCFullYear()
+  );
+  const [calendarMonth, setCalendarMonth] = React.useState<number>(
+    Number.isNaN(initialDateObj.getTime()) ? 10 : initialDateObj.getUTCMonth()
+  );
+
+  function handlePrevMonth() {
+    if (calendarMonth === 0) {
+      setCalendarMonth(11);
+      setCalendarYear((y) => y - 1);
+    } else {
+      setCalendarMonth((m) => m - 1);
+    }
+  }
+
+  function handleNextMonth() {
+    if (calendarMonth === 11) {
+      setCalendarMonth(0);
+      setCalendarYear((y) => y + 1);
+    } else {
+      setCalendarMonth((m) => m + 1);
+    }
+  }
+
+  // Distinct months that have schedules for quick jump buttons
+  const scheduleMonthGroups = React.useMemo(() => {
+    const map = new Map<
+      string,
+      { year: number; month: number; count: number }
+    >();
+    for (const s of filtered) {
+      const d = new Date(s.date);
+      if (Number.isNaN(d.getTime())) continue;
+      const y = d.getUTCFullYear();
+      const m = d.getUTCMonth();
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, { year: y, month: m, count: 1 });
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => a.year - b.year || a.month - b.month
+    );
+  }, [filtered]);
+
   function handleExportCsv() {
     const header =
       "Tanggal,Waktu,Kegiatan,Topik,Instansi OPD,Lokasi,Metode,Status,Pembina\n";
@@ -163,15 +278,129 @@ export function PembinaanClient({
     }
   }
 
-  // Group schedules by day of month for Calendar view
-  const calendarDays = Array.from({ length: 30 }, (_, idx) => {
-    const dayNum = idx + 1;
-    const dayMatches = filtered.filter((s) => {
-      const d = new Date(s.date);
-      return d.getUTCDate() === dayNum;
-    });
-    return { dayNum, events: dayMatches };
-  });
+  // Build accurate Monday-first 7-column calendar cells for (calendarYear, calendarMonth)
+  const calendarCells = React.useMemo(() => {
+    const firstDayOfMonth = new Date(
+      Date.UTC(calendarYear, calendarMonth, 1)
+    );
+    const daysInCurrentMonth = new Date(
+      Date.UTC(calendarYear, calendarMonth + 1, 0)
+    ).getUTCDate();
+    const daysInPrevMonth = new Date(
+      Date.UTC(calendarYear, calendarMonth, 0)
+    ).getUTCDate();
+
+    // Convert Sunday=0..Saturday=6 into Monday=0..Sunday=6
+    const startWeekdayMondayIndex = (firstDayOfMonth.getUTCDay() + 6) % 7;
+
+    const cells: Array<{
+      key: string;
+      year: number;
+      month: number;
+      dayNum: number;
+      isoDate: string;
+      dayName: string;
+      isCurrentMonth: boolean;
+      isWeekend: boolean;
+      events: ScheduleItem[];
+    }> = [];
+
+    // 1. Leading days from previous month
+    const prevYear = calendarMonth === 0 ? calendarYear - 1 : calendarYear;
+    const prevMonth = calendarMonth === 0 ? 11 : calendarMonth - 1;
+    for (let i = startWeekdayMondayIndex - 1; i >= 0; i--) {
+      const dayNum = daysInPrevMonth - i;
+      const dateObj = new Date(Date.UTC(prevYear, prevMonth, dayNum));
+      const weekdayIdx = (dateObj.getUTCDay() + 6) % 7;
+      const isoDate = `${prevYear}-${String(prevMonth + 1).padStart(
+        2,
+        "0"
+      )}-${String(dayNum).padStart(2, "0")}`;
+      const dayEvents = filtered.filter((s) => {
+        const d = new Date(s.date);
+        return (
+          d.getUTCFullYear() === prevYear &&
+          d.getUTCMonth() === prevMonth &&
+          d.getUTCDate() === dayNum
+        );
+      });
+      cells.push({
+        key: `prev-${isoDate}`,
+        year: prevYear,
+        month: prevMonth,
+        dayNum,
+        isoDate,
+        dayName: WEEKDAY_HEADERS_ID[weekdayIdx].full,
+        isCurrentMonth: false,
+        isWeekend: weekdayIdx >= 5,
+        events: dayEvents,
+      });
+    }
+
+    // 2. Days of the active month
+    for (let dayNum = 1; dayNum <= daysInCurrentMonth; dayNum++) {
+      const dateObj = new Date(Date.UTC(calendarYear, calendarMonth, dayNum));
+      const weekdayIdx = (dateObj.getUTCDay() + 6) % 7;
+      const isoDate = `${calendarYear}-${String(calendarMonth + 1).padStart(
+        2,
+        "0"
+      )}-${String(dayNum).padStart(2, "0")}`;
+      const dayEvents = filtered.filter((s) => {
+        const d = new Date(s.date);
+        return (
+          d.getUTCFullYear() === calendarYear &&
+          d.getUTCMonth() === calendarMonth &&
+          d.getUTCDate() === dayNum
+        );
+      });
+      cells.push({
+        key: `curr-${isoDate}`,
+        year: calendarYear,
+        month: calendarMonth,
+        dayNum,
+        isoDate,
+        dayName: WEEKDAY_HEADERS_ID[weekdayIdx].full,
+        isCurrentMonth: true,
+        isWeekend: weekdayIdx >= 5,
+        events: dayEvents,
+      });
+    }
+
+    // 3. Trailing days from next month to complete the 7-column week row
+    const remainder = cells.length % 7;
+    const trailingCount = remainder === 0 ? 0 : 7 - remainder;
+    const nextYear = calendarMonth === 11 ? calendarYear + 1 : calendarYear;
+    const nextMonth = calendarMonth === 11 ? 0 : calendarMonth + 1;
+    for (let dayNum = 1; dayNum <= trailingCount; dayNum++) {
+      const dateObj = new Date(Date.UTC(nextYear, nextMonth, dayNum));
+      const weekdayIdx = (dateObj.getUTCDay() + 6) % 7;
+      const isoDate = `${nextYear}-${String(nextMonth + 1).padStart(
+        2,
+        "0"
+      )}-${String(dayNum).padStart(2, "0")}`;
+      const dayEvents = filtered.filter((s) => {
+        const d = new Date(s.date);
+        return (
+          d.getUTCFullYear() === nextYear &&
+          d.getUTCMonth() === nextMonth &&
+          d.getUTCDate() === dayNum
+        );
+      });
+      cells.push({
+        key: `next-${isoDate}`,
+        year: nextYear,
+        month: nextMonth,
+        dayNum,
+        isoDate,
+        dayName: WEEKDAY_HEADERS_ID[weekdayIdx].full,
+        isCurrentMonth: false,
+        isWeekend: weekdayIdx >= 5,
+        events: dayEvents,
+      });
+    }
+
+    return cells;
+  }, [calendarYear, calendarMonth, filtered]);
 
   return (
     <div
@@ -414,7 +643,7 @@ export function PembinaanClient({
                   >
                     <td className="whitespace-nowrap px-5 py-4">
                       <p className="font-semibold text-[#142b45] dark:text-white">
-                        {formatDateId(item.date)}
+                        {getDayNameId(item.date)}, {formatDateId(item.date)}
                       </p>
                       <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
                         {item.startTime} – {item.endTime}
@@ -473,52 +702,200 @@ export function PembinaanClient({
             </table>
           </div>
         ) : (
-          <div className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[15px] font-bold text-[#142b45] dark:text-white">
-                Kalender Kegiatan Pembinaan Sektoral — Oktober / November 2026
-              </h3>
-              <span className="text-[12px] text-slate-500">
-                Klik agenda pada tanggal untuk melihat rincian
+          <div className="p-5 space-y-4">
+            {/* Calendar Top Bar: Month/Year Navigation & Quick Jump Pills */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#e1e8f0] bg-white text-[#142b45] hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  title="Bulan Sebelumnya"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="min-w-[180px] text-center">
+                  <h3 className="text-[16px] font-bold text-[#142b45] dark:text-white">
+                    {MONTH_NAMES_ID[calendarMonth]} {calendarYear}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#e1e8f0] bg-white text-[#142b45] hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  title="Bulan Berikutnya"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Quick Jump to Months with Agendas */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-[11px] font-medium text-slate-500">
+                  Bulan Agenda:
+                </span>
+                {scheduleMonthGroups.map((grp) => {
+                  const isActiveMonth =
+                    grp.year === calendarYear && grp.month === calendarMonth;
+                  return (
+                    <button
+                      key={`${grp.year}-${grp.month}`}
+                      type="button"
+                      onClick={() => {
+                        setCalendarYear(grp.year);
+                        setCalendarMonth(grp.month);
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                        isActiveMonth
+                          ? "border-[#10345b] bg-[#10345b] text-white dark:border-blue-500 dark:bg-blue-600"
+                          : "border-[#e1e8f0] bg-[#f8fafc] text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      }`}
+                    >
+                      <span>
+                        {MONTH_NAMES_ID[grp.month]} {grp.year}
+                      </span>
+                      <span
+                        className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                          isActiveMonth
+                            ? "bg-white/20 text-white"
+                            : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                        }`}
+                      >
+                        {grp.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[#f8fafc] px-3.5 py-2 text-[11px] text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-[#10345b]" />
+                  <span>Agenda Terjadwal</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-[#087f80]" />
+                  <span>Kegiatan Selesai</span>
+                </span>
+              </div>
+              <span>
+                Klik kartu kegiatan pada tanggal untuk melihat rincian lengkap
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5 lg:grid-cols-6">
-              {calendarDays.map((day) => (
-                <div
-                  key={day.dayNum}
-                  className={`min-h-[104px] rounded-[8px] border p-2.5 transition ${
-                    day.events.length > 0
-                      ? "border-[#1557b0]/40 bg-[#ebf3ff]/30 dark:border-blue-800 dark:bg-blue-950/30"
-                      : "border-[#e1e8f0] bg-white dark:border-slate-800 dark:bg-slate-900"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-bold text-slate-500 dark:text-slate-400">
-                      Tgl {day.dayNum}
-                    </span>
-                    {day.events.length > 0 && (
-                      <span className="h-2 w-2 rounded-full bg-[#087f80]" />
-                    )}
-                  </div>
-                  <div className="mt-2 space-y-1.5">
-                    {day.events.map((ev) => (
-                      <button
-                        key={ev.id}
-                        type="button"
-                        onClick={() => setDetailItem(ev)}
-                        className="w-full rounded bg-[#10345b] p-1.5 text-left text-[11px] text-white hover:bg-[#1557b0]"
-                      >
-                        <p className="line-clamp-2 font-semibold leading-tight">
-                          {ev.title}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-[#90dfd7]">
-                          {ev.startTime} · {ev.opdShortName || "Semua OPD"}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
+
+            {/* 7-Column Calendar Grid */}
+            <div className="overflow-x-auto">
+              <div className="min-w-[760px]">
+                {/* Day of Week Header Row (Senin - Minggu) */}
+                <div className="grid grid-cols-7 rounded-t-[10px] border border-[#e1e8f0] bg-[#10345b] text-white dark:border-slate-800">
+                  {WEEKDAY_HEADERS_ID.map((dayHeader) => (
+                    <div
+                      key={dayHeader.full}
+                      className={`px-3 py-2.5 text-center text-[12px] font-bold tracking-wide ${
+                        dayHeader.isWeekend ? "text-[#90dfd7]" : "text-white"
+                      }`}
+                    >
+                      {dayHeader.full}
+                    </div>
+                  ))}
                 </div>
-              ))}
+
+                {/* Calendar Date Cells */}
+                <div className="grid grid-cols-7 border-x border-b border-[#e1e8f0] dark:border-slate-800">
+                  {calendarCells.map((cell) => {
+                    const hasEvents = cell.events.length > 0;
+                    return (
+                      <div
+                        key={cell.key}
+                        className={`flex min-h-[124px] flex-col justify-between border-r border-b border-[#e1e8f0] p-2.5 transition last:border-r-0 dark:border-slate-800 ${
+                          !cell.isCurrentMonth
+                            ? "bg-slate-50/70 text-slate-400 dark:bg-slate-900/40 dark:text-slate-600"
+                            : hasEvents
+                            ? "bg-[#ebf3ff]/35 dark:bg-blue-950/25"
+                            : cell.isWeekend
+                            ? "bg-slate-50/40 dark:bg-slate-900/70"
+                            : "bg-white dark:bg-slate-900"
+                        }`}
+                      >
+                        <div>
+                          {/* Cell Top Row: Date Number + Month (if edge) + Add Button */}
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[12px] font-bold ${
+                                !cell.isCurrentMonth
+                                  ? "text-slate-400 dark:text-slate-600"
+                                  : hasEvents
+                                  ? "rounded-md bg-[#10345b] px-2 py-0.5 text-white dark:bg-blue-600"
+                                  : cell.isWeekend
+                                  ? "text-rose-600 dark:text-rose-400"
+                                  : "text-[#142b45] dark:text-slate-200"
+                              }`}
+                            >
+                              <span>{cell.dayNum}</span>
+                              {(!cell.isCurrentMonth || cell.dayNum === 1) && (
+                                <span className="text-[10px] font-semibold uppercase opacity-80">
+                                  {MONTH_SHORT_ID[cell.month]}
+                                </span>
+                              )}
+                            </span>
+
+                            {canManage && cell.isCurrentMonth && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDate(cell.isoDate);
+                                  setShowCreateModal(true);
+                                }}
+                                className="rounded p-0.5 text-slate-400 hover:bg-slate-200/70 hover:text-[#10345b] dark:hover:bg-slate-800 dark:hover:text-white"
+                                title={`Tambah agenda pada ${cell.dayName}, ${cell.dayNum} ${MONTH_NAMES_ID[cell.month]} ${cell.year}`}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Events List in this Date Cell */}
+                          <div className="mt-2 space-y-1.5">
+                            {cell.events.map((ev) => (
+                              <button
+                                key={ev.id}
+                                type="button"
+                                onClick={() => setDetailItem(ev)}
+                                className={`w-full rounded-[6px] p-1.5 text-left text-[11px] text-white shadow-2xs transition ${
+                                  ev.status === "SELESAI"
+                                    ? "bg-[#087f80] hover:bg-[#066667]"
+                                    : "bg-[#10345b] hover:bg-[#1557b0]"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1 text-[10px] text-[#90dfd7]">
+                                  <span className="font-semibold">
+                                    {ev.startTime}
+                                  </span>
+                                  <span className="truncate">
+                                    {ev.opdShortName || "Semua OPD"}
+                                  </span>
+                                </div>
+                                <p className="mt-0.5 line-clamp-2 font-semibold leading-snug text-white">
+                                  {ev.title}
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {hasEvents && (
+                          <p className="mt-1.5 text-right text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                            {cell.events.length} agenda
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -539,11 +916,15 @@ export function PembinaanClient({
               className="flex h-[68px] w-[64px] shrink-0 flex-col items-center justify-center rounded-[10px] bg-[#10345b] text-white"
               data-node-id="4:3360"
             >
-              <span className="text-[22px] font-bold leading-none">
+              <span className="text-[10px] font-semibold text-[#90dfd7]">
+                {getDayNameId(nearestSchedule.date).slice(0, 3).toUpperCase()}
+              </span>
+              <span className="text-[20px] font-bold leading-none">
                 {new Date(nearestSchedule.date).getUTCDate()}
               </span>
-              <span className="mt-1 text-[11px] uppercase text-[#90dfd7]">
-                NOV
+              <span className="mt-0.5 text-[10px] uppercase text-[#90dfd7]">
+                {MONTH_SHORT_ID[new Date(nearestSchedule.date).getUTCMonth()] ||
+                  "NOV"}
               </span>
             </div>
             <div className="min-w-0 flex-1" data-node-id="4:3363">
