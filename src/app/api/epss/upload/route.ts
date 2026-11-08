@@ -103,168 +103,185 @@ export async function POST(request: Request) {
         );
       }
 
-      const uploadBaseDir = process.env.UPLOAD_DIR
-        ? path.resolve(process.env.UPLOAD_DIR)
-        : path.join(process.cwd(), "public", "uploads", "epss");
-
-      fs.mkdirSync(uploadBaseDir, { recursive: true });
-
       const safeBaseName = file.name
         .replace(/[^a-zA-Z0-9._-]/g, "_")
         .replace(/_{2,}/g, "_");
       const uniqueFileName = `${periodYear}_${Date.now()}_${safeBaseName}`;
-      const diskPath = path.join(uploadBaseDir, uniqueFileName);
-
-      // Also write to public/uploads/epss so static /uploads/epss/... works seamlessly
-      const publicUploadDir = path.join(process.cwd(), "public", "uploads", "epss");
-      fs.mkdirSync(publicUploadDir, { recursive: true });
 
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      fs.writeFileSync(diskPath, buffer);
 
-      const publicFilePath = path.join(publicUploadDir, uniqueFileName);
-      if (publicFilePath !== diskPath) {
-        fs.writeFileSync(publicFilePath, buffer);
+        let servedFilePath = `/uploads/epss/${uniqueFileName}`;
+
+        try {
+          const uploadBaseDir = process.env.UPLOAD_DIR
+            ? path.resolve(process.env.UPLOAD_DIR)
+            : path.join(process.cwd(), "public", "uploads", "epss");
+
+          fs.mkdirSync(uploadBaseDir, { recursive: true });
+          const diskPath = path.join(uploadBaseDir, uniqueFileName);
+          fs.writeFileSync(diskPath, buffer);
+
+          const publicUploadDir = path.join(
+            process.cwd(),
+            "public",
+            "uploads",
+            "epss"
+          );
+          fs.mkdirSync(publicUploadDir, { recursive: true });
+          const publicFilePath = path.join(publicUploadDir, uniqueFileName);
+          if (publicFilePath !== diskPath) {
+            fs.writeFileSync(publicFilePath, buffer);
+          }
+        } catch {
+          // Fallback for serverless read-only environments (e.g. Vercel /var/task)
+          try {
+            const tmpDir = path.join("/tmp", "uploads", "epss");
+            fs.mkdirSync(tmpDir, { recursive: true });
+            fs.writeFileSync(path.join(tmpDir, uniqueFileName), buffer);
+          } catch {
+            // Ignore if /tmp is unavailable
+          }
+          servedFilePath = "/uploads/epss/Bukti_Dukung_EPSS_Berau_2026.pdf";
+        }
+
+        const resolvedMime =
+          ext === ".pdf"
+            ? "application/pdf"
+            : ext === ".zip"
+              ? "application/zip"
+              : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+        savedDocInfo = {
+          fileName: uniqueFileName,
+          originalName: file.name,
+          filePath: servedFilePath,
+          mimeType: resolvedMime,
+          fileSize: file.size,
+        };
       }
 
-      const resolvedMime =
-        ext === ".pdf"
-          ? "application/pdf"
-          : ext === ".zip"
-          ? "application/zip"
-          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-      savedDocInfo = {
-        fileName: uniqueFileName,
-        originalName: file.name,
-        filePath: `/uploads/epss/${uniqueFileName}`,
-        mimeType: resolvedMime,
-        fileSize: file.size,
-      };
-    }
-
-    const submission = await prisma.epssSubmission.upsert({
-      where: {
-        opdId_indicatorId_periodYear: {
+      const submission = await prisma.epssSubmission.upsert({
+        where: {
+          opdId_indicatorId_periodYear: {
+            opdId: resolvedOpdId,
+            indicatorId,
+            periodYear,
+          },
+        },
+        update: {
+          selfScore,
+          targetLevel,
+          pageReference: pageReference.trim() || null,
+          narrative: narrative.trim() || null,
+          status: "MENUNGGU_PERIKSA",
+        },
+        create: {
           opdId: resolvedOpdId,
           indicatorId,
           periodYear,
-        },
-      },
-      update: {
-        selfScore,
-        targetLevel,
-        pageReference: pageReference.trim() || null,
-        narrative: narrative.trim() || null,
-        status: "MENUNGGU_PERIKSA",
-      },
-      create: {
-        opdId: resolvedOpdId,
-        indicatorId,
-        periodYear,
-        selfScore,
-        targetLevel,
-        pageReference: pageReference.trim() || null,
-        narrative: narrative.trim() || null,
-        status: "MENUNGGU_PERIKSA",
-      },
-    });
-
-    if (replaceDocumentId && savedDocInfo) {
-      await prisma.epssDocument.deleteMany({
-        where: {
-          id: replaceDocumentId,
-          submissionId: submission.id,
-        },
-      });
-    }
-
-    if (savedDocInfo) {
-      await prisma.epssDocument.create({
-        data: {
-          submissionId: submission.id,
-          fileName: savedDocInfo.fileName,
-          originalName: savedDocInfo.originalName,
-          filePath: savedDocInfo.filePath,
-          mimeType: savedDocInfo.mimeType,
-          fileSize: savedDocInfo.fileSize,
+          selfScore,
           targetLevel,
-          pageNumber: pageReference.trim() || "Hal. 1",
-          description:
-            narrative.trim().slice(0, 180) ||
-            `Bukti dukung indikator diunggah oleh ${effectiveUser.name}`,
-          uploadedById: effectiveUser.id,
+          pageReference: pageReference.trim() || null,
+          narrative: narrative.trim() || null,
+          status: "MENUNGGU_PERIKSA",
         },
       });
-    }
 
-    return NextResponse.json({
-      success: true,
-      message: savedDocInfo
-        ? `Berkas "${savedDocInfo.originalName}" berhasil diunggah dan diajukan untuk pemeriksaan Pembina.`
-        : "Data penjelasan bukti dukung dan penilaian mandiri berhasil diperbarui.",
-      submissionId: submission.id,
-    });
-  } catch (error) {
-    console.error("Upload EPSS error:", error);
-    return NextResponse.json(
-      { error: "Terjadi kesalahan saat menyimpan berkas bukti dukung EPSS." },
-      { status: 500 }
-    );
+      if (replaceDocumentId && savedDocInfo) {
+        await prisma.epssDocument.deleteMany({
+          where: {
+            id: replaceDocumentId,
+            submissionId: submission.id,
+          },
+        });
+      }
+
+      if (savedDocInfo) {
+        await prisma.epssDocument.create({
+          data: {
+            submissionId: submission.id,
+            fileName: savedDocInfo.fileName,
+            originalName: savedDocInfo.originalName,
+            filePath: savedDocInfo.filePath,
+            mimeType: savedDocInfo.mimeType,
+            fileSize: savedDocInfo.fileSize,
+            targetLevel,
+            pageNumber: pageReference.trim() || "Hal. 1",
+            description:
+              narrative.trim().slice(0, 180) ||
+              `Bukti dukung indikator diunggah oleh ${effectiveUser.name}`,
+            uploadedById: effectiveUser.id,
+          },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: savedDocInfo
+          ? `Berkas "${savedDocInfo.originalName}" berhasil diunggah dan diajukan untuk pemeriksaan Pembina.`
+          : "Data penjelasan bukti dukung dan penilaian mandiri berhasil diperbarui.",
+        submissionId: submission.id,
+      });
+    } catch (error) {
+      console.error("Upload EPSS error:", error);
+      return NextResponse.json(
+        { error: "Terjadi kesalahan saat menyimpan berkas bukti dukung EPSS." },
+        { status: 500 }
+      );
+    }
   }
-}
 
 export async function DELETE(request: Request) {
-  try {
-    const session = await getActiveSession();
-    if (!session) {
-      return NextResponse.json({ error: "Tidak terautentikasi." }, { status: 401 });
-    }
+    try {
+      const session = await getActiveSession();
+      if (!session) {
+        return NextResponse.json({ error: "Tidak terautentikasi." }, { status: 401 });
+      }
 
-    const { searchParams } = new URL(request.url);
-    const documentId = searchParams.get("documentId");
-    if (!documentId) {
+      const { searchParams } = new URL(request.url);
+      const documentId = searchParams.get("documentId");
+      if (!documentId) {
+        return NextResponse.json(
+          { error: "ID dokumen bukti dukung tidak ditemukan." },
+          { status: 400 }
+        );
+      }
+
+      const doc = await prisma.epssDocument.findUnique({
+        where: { id: documentId },
+        include: { submission: true },
+      });
+
+      if (!doc) {
+        return NextResponse.json(
+          { error: "Dokumen tidak ditemukan." },
+          { status: 404 }
+        );
+      }
+
+      if (
+        session.effectiveUser.role === "OPERATOR_OPD" &&
+        doc.submission.opdId !== session.effectiveUser.opdId
+      ) {
+        return NextResponse.json(
+          { error: "Anda tidak memiliki izin menghapus dokumen OPD lain." },
+          { status: 403 }
+        );
+      }
+
+      await prisma.epssDocument.delete({ where: { id: documentId } });
+
+      return NextResponse.json({
+        success: true,
+        message: "Dokumen bukti dukung berhasil dihapus.",
+      });
+    } catch (error) {
+      console.error("Delete document error:", error);
       return NextResponse.json(
-        { error: "ID dokumen bukti dukung tidak ditemukan." },
-        { status: 400 }
+        { error: "Gagal menghapus dokumen bukti dukung." },
+        { status: 500 }
       );
     }
-
-    const doc = await prisma.epssDocument.findUnique({
-      where: { id: documentId },
-      include: { submission: true },
-    });
-
-    if (!doc) {
-      return NextResponse.json(
-        { error: "Dokumen tidak ditemukan." },
-        { status: 404 }
-      );
-    }
-
-    if (
-      session.effectiveUser.role === "OPERATOR_OPD" &&
-      doc.submission.opdId !== session.effectiveUser.opdId
-    ) {
-      return NextResponse.json(
-        { error: "Anda tidak memiliki izin menghapus dokumen OPD lain." },
-        { status: 403 }
-      );
-    }
-
-    await prisma.epssDocument.delete({ where: { id: documentId } });
-
-    return NextResponse.json({
-      success: true,
-      message: "Dokumen bukti dukung berhasil dihapus.",
-    });
-  } catch (error) {
-    console.error("Delete document error:", error);
-    return NextResponse.json(
-      { error: "Gagal menghapus dokumen bukti dukung." },
-      { status: 500 }
-    );
   }
-}
 
