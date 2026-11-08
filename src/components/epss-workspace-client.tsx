@@ -196,12 +196,7 @@ export function EpssWorkspaceClient({
   const canReview =
     effectiveRole === "PEMBINA_SEKTORAL" || effectiveRole === "SUPERADMIN";
 
-  const basePath =
-    mode === "penilaian"
-      ? "/dashboard/epss/penilaian"
-      : mode === "upload"
-      ? "/dashboard/epss/upload"
-      : "/dashboard/epss";
+  const basePath = "/dashboard/epss";
 
   function handleYearChange(newYear: number) {
     router.push(`${basePath}?opdId=${selectedOpd.id}&year=${newYear}`);
@@ -471,17 +466,17 @@ export function EpssWorkspaceClient({
       >
         <div className="max-w-3xl" data-node-id="4:3687">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#087f80] dark:text-teal-400">
-            {mode === "penilaian"
-              ? "PANEL PEMERIKSAAN PEMBINA SEKTORAL BPS"
-              : effectiveRole === "OPERATOR_OPD"
+            {effectiveRole === "OPERATOR_OPD"
               ? `PENILAIAN EPSS & UNGGAH BUKTI DUKUNG — ${selectedOpd.shortName}`
+              : effectiveRole === "PEMBINA_SEKTORAL"
+              ? "PANEL PEMERIKSAAN & PENILAIAN PEMBINA SEKTORAL BPS"
               : "EVALUASI PENYELENGGARAAN STATISTIK SEKTORAL (EPSS)"}
           </p>
           <h1 className="mt-1 text-[26px] font-bold tracking-tight text-[#142b45] dark:text-white">
-            {mode === "penilaian"
-              ? `Pemeriksaan & Penilaian Kematangan EPSS (${selectedYear})`
-              : effectiveRole === "OPERATOR_OPD"
+            {effectiveRole === "OPERATOR_OPD"
               ? `Penilaian EPSS & Bukti Dukung — ${selectedOpd.shortName} (${selectedYear})`
+              : effectiveRole === "PEMBINA_SEKTORAL"
+              ? `Penilaian & Reviu Kematangan EPSS (${selectedYear})`
               : `Penilaian EPSS — Persiapan Bukti & Evaluasi (${selectedYear})`}
           </h1>
           <p className="mt-1 text-[14px] text-slate-600 dark:text-slate-400">
@@ -500,16 +495,6 @@ export function EpssWorkspaceClient({
             <Download className="h-4 w-4 text-[#1557b0]" />
             <span>Unduh Rekap CSV</span>
           </button>
-
-          {mode !== "penilaian" && canReview && (
-            <Link
-              href={`/dashboard/epss/penilaian?opdId=${selectedOpd.id}&year=${selectedYear}`}
-              className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-[#087f80] px-4 text-[13px] font-semibold text-white hover:bg-[#066667]"
-            >
-              <CheckSquare className="h-4 w-4" />
-              <span>Mode Penilaian Pembina</span>
-            </Link>
-          )}
         </div>
       </div>
 

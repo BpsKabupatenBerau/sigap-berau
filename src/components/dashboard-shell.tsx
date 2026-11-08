@@ -107,17 +107,8 @@ export function DashboardShell({
       href: "/dashboard/epss",
       label: "Penilaian EPSS",
       icon: ClipboardCheck,
-      exact: true,
-      show: true,
-    },
-    {
-      href: "/dashboard/epss/penilaian",
-      label: "Reviu & Skor Pembina",
-      icon: CheckSquare,
       exact: false,
-      show:
-        effectiveUser.role === "PEMBINA_SEKTORAL" ||
-        effectiveUser.role === "SUPERADMIN",
+      show: true,
     },
     {
       href: "/dashboard/users",

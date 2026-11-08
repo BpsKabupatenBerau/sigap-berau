@@ -211,32 +211,22 @@ export default async function DashboardOverviewPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {effectiveUser.role === "OPERATOR_OPD" ? (
-            <Link
-              href={`/dashboard/epss?year=${selectedYear}`}
-              className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-white px-4 text-[13px] font-semibold text-[#142b45] hover:bg-slate-100"
-            >
-              <FileUp className="h-4 w-4 text-[#1557b0]" />
-              <span>Buka Penilaian & Unggah Bukti EPSS</span>
-            </Link>
-          ) : (
-            <>
-              <Link
-                href={`/dashboard/epss/penilaian?year=${selectedYear}`}
-                className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-white px-4 text-[13px] font-semibold text-[#142b45] hover:bg-slate-100"
-              >
+          <Link
+            href={`/dashboard/epss?year=${selectedYear}`}
+            className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-white px-4 text-[13px] font-semibold text-[#142b45] hover:bg-slate-100"
+          >
+            {effectiveUser.role === "OPERATOR_OPD" ? (
+              <>
+                <FileUp className="h-4 w-4 text-[#1557b0]" />
+                <span>Buka Penilaian & Unggah Bukti EPSS</span>
+              </>
+            ) : (
+              <>
                 <CheckSquare className="h-4 w-4 text-[#087f80]" />
-                <span>Mulai Penilaian OPD</span>
-              </Link>
-              <Link
-                href={`/dashboard/epss?year=${selectedYear}`}
-                className="inline-flex h-[42px] items-center gap-2 rounded-[8px] border border-white/25 bg-white/10 px-4 text-[13px] font-semibold text-white hover:bg-white/20"
-              >
-                <span>Tabel 38 Indikator EPSS</span>
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </>
-          )}
+                <span>Buka Penilaian & Reviu EPSS</span>
+              </>
+            )}
+          </Link>
         </div>
       </div>
 
@@ -424,7 +414,7 @@ export default async function DashboardOverviewPage({
                       </Link>
                     ) : (
                       <Link
-                        href={`/dashboard/epss/penilaian?opdId=${opd.id}&year=${selectedYear}`}
+                        href={`/dashboard/epss?opdId=${opd.id}&year=${selectedYear}`}
                         className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#087f80] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#066667]"
                       >
                         <CheckSquare className="h-3.5 w-3.5" />
