@@ -154,6 +154,76 @@ export function EpssWorkspaceClient({
     "4": true,
     "5": true,
   });
+  const [expandedAspects, setExpandedAspects] = React.useState<
+    Record<string, boolean>
+  >(() => {
+    const initial: Record<string, boolean> = {};
+    for (const dom of domains) {
+      for (const asp of dom.aspects) {
+        initial[asp.id] = true;
+      }
+    }
+    return initial;
+  });
+
+  function expandAllHierarchy() {
+    const nextDomains: Record<string, boolean> = {};
+    const nextAspects: Record<string, boolean> = {};
+    for (const dom of domains) {
+      nextDomains[dom.code] = true;
+      for (const asp of dom.aspects) {
+        nextAspects[asp.id] = true;
+      }
+    }
+    setExpandedDomains(nextDomains);
+    setExpandedAspects(nextAspects);
+  }
+
+  function collapseToAspects() {
+    const nextDomains: Record<string, boolean> = {};
+    const nextAspects: Record<string, boolean> = {};
+    for (const dom of domains) {
+      nextDomains[dom.code] = true;
+      for (const asp of dom.aspects) {
+        nextAspects[asp.id] = false;
+      }
+    }
+    setExpandedDomains(nextDomains);
+    setExpandedAspects(nextAspects);
+  }
+
+  function collapseToDomains() {
+    const nextDomains: Record<string, boolean> = {};
+    const nextAspects: Record<string, boolean> = {};
+    for (const dom of domains) {
+      nextDomains[dom.code] = false;
+      for (const asp of dom.aspects) {
+        nextAspects[asp.id] = false;
+      }
+    }
+    setExpandedDomains(nextDomains);
+    setExpandedAspects(nextAspects);
+  }
+
+  // Hitung tingkatan aktif untuk highlight tombol Lv.1 / Lv.2 / Lv.3
+  const allDomainsCollapsed = domains.every((d) => !expandedDomains[d.code]);
+  const allDomainsExpanded = domains.every(
+    (d) => expandedDomains[d.code] ?? true
+  );
+  const allAspectsCollapsed = domains.every((d) =>
+    d.aspects.every((a) => !expandedAspects[a.id])
+  );
+  const allAspectsExpanded = domains.every((d) =>
+    d.aspects.every((a) => expandedAspects[a.id] ?? true)
+  );
+
+  const activeHierarchyLevel: 1 | 2 | 3 | null = allDomainsCollapsed
+    ? 1
+    : allDomainsExpanded && allAspectsCollapsed
+    ? 2
+    : allDomainsExpanded && allAspectsExpanded
+    ? 3
+    : null;
 
   // Modals state
   const [previewDoc, setPreviewDoc] = React.useState<ViewableDocument | null>(
@@ -210,16 +280,8 @@ export function EpssWorkspaceClient({
   function openUploadModal(ind: SerializedIndicator) {
     setUploadModalIndicator(ind);
     setUploadSelfScore(ind.submission?.selfScore || 3);
-    setUploadPageRef(
-      ind.submission?.pageReference || "Halaman 1 - 12, Pasal 8 Perbup SDI"
-    );
-    setUploadNarrative(
-      ind.submission?.narrative ||
-        `(i) Bukti dukung menunjukkan pemenuhan indikator ${ind.code} (${ind.name}) pada 2 kegiatan statistik sektoral yang dinilaikan.\n(ii) Bukti_${ind.code}_${selectedOpd.shortName.replace(
-          /\s+/g,
-          "_"
-        )}_${selectedYear}.pdf\n(iii) Halaman 1-12.`
-    );
+    setUploadPageRef(ind.submission?.pageReference || "");
+    setUploadNarrative(ind.submission?.narrative || "");
     setUploadFile(null);
     setReplaceDocId("");
     setUploadError(null);
@@ -731,435 +793,512 @@ export function EpssWorkspaceClient({
         </div>
       </div>
 
-      {/* Tahapan evaluasi (Figma 4:3729) */}
-      <div
-        className="grid grid-cols-1 gap-3 rounded-[12px] border border-[#e1e8f0] bg-white p-4 sm:grid-cols-3 dark:border-slate-800 dark:bg-slate-900"
-        data-node-id="4:3729"
-      >
-        <div className="flex items-center gap-3" data-node-id="4:3730">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#10345b] text-[12px] font-bold text-white">
-            1
-          </span>
-          <span className="text-[13px] font-semibold text-[#142b45] dark:text-white">
-            Penyiapan & Unggah Bukti OPD
-          </span>
-          <ChevronRight className="ml-auto hidden h-4 w-4 text-slate-400 sm:block" />
-        </div>
-        <div className="flex items-center gap-3" data-node-id="4:3735">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#087f80] text-[12px] font-bold text-white">
-            2
-          </span>
-          <span className="text-[13px] font-semibold text-[#142b45] dark:text-white">
-            Verifikasi & Catatan Pembina BPS
-          </span>
-          <ChevronRight className="ml-auto hidden h-4 w-4 text-slate-400 sm:block" />
-        </div>
-        <div className="flex items-center gap-3" data-node-id="4:3740">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#ebf3ff] text-[12px] font-bold text-[#1557b0] dark:bg-blue-950 dark:text-blue-300">
-            3
-          </span>
-          <span className="text-[13px] font-semibold text-[#142b45] dark:text-white">
-            Penetapan Skor Kematangan (1–5)
-          </span>
-        </div>
-      </div>
-
-      {/* Tabel kebutuhan bukti — Ringkasan 5 Domain EPSS (Figma 4:3744) */}
-      <div
-        className="rounded-[12px] border border-[#e1e8f0] bg-white dark:border-slate-800 dark:bg-slate-900"
-        data-node-id="4:3744"
-      >
-        <div
-          className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e1e8f0] p-5 dark:border-slate-800"
-          data-node-id="4:3745"
-        >
-          <div data-node-id="4:3746">
-            <h2 className="text-[17px] font-bold text-[#142b45] dark:text-white">
-              Ringkasan 5 Domain Evaluasi EPSS — {selectedOpd.shortName}
-            </h2>
-            <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
-              Ikhtisar kelengkapan bukti dukung pada lima domain utama sebelum
-              memeriksa 38 rincian indikator di bawah.
-            </p>
-          </div>
-          <Badge variant="secondary">Total Bobot: 100%</Badge>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
-            <thead>
-              <tr
-                className="border-b border-[#e1e8f0] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400"
-                data-node-id="4:3752"
-              >
-                <th className="px-5 py-3.5">Domain EPSS & Bobot</th>
-                <th className="px-4 py-3.5">Cakupan Aspek & Indikator</th>
-                <th className="px-4 py-3.5">Kelengkapan Bukti</th>
-                <th className="px-4 py-3.5">Status Persiapan</th>
-                <th className="px-5 py-3.5 text-right">Tindakan Cepat</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
-              {domainSummaryRows.map((row) => (
-                <tr
-                  key={row.domain.id}
-                  className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
-                  data-node-id="4:3758"
-                >
-                  <td className="px-5 py-4" data-node-id="4:3759">
-                    <p className="font-bold text-[#142b45] dark:text-white">
-                      Domain {row.domain.code}: {row.domain.name}
-                    </p>
-                    <p className="mt-0.5 text-[12px] font-medium text-[#087f80] dark:text-teal-400">
-                      Bobot Domain: {row.domain.weight}%
-                    </p>
-                  </td>
-                  <td className="max-w-[340px] px-4 py-4" data-node-id="4:3762">
-                    <p className="text-slate-700 dark:text-slate-200">
-                      {row.domain.aspects.length} Aspek · {row.totalInds}{" "}
-                      Indikator Penilaian
-                    </p>
-                    <p className="mt-0.5 truncate text-[12px] text-slate-500 dark:text-slate-400">
-                      {row.domain.description}
-                    </p>
-                  </td>
-                  <td className="w-[180px] px-4 py-4" data-node-id="4:3765">
-                    <div className="flex items-center justify-between text-[12px] font-semibold">
-                      <span>{row.pct}%</span>
-                      <span className="font-normal text-slate-500">
-                        {row.filledInds}/{row.totalInds} terisi
-                      </span>
-                    </div>
-                    <div className="mt-1.5" data-node-id="4:3767">
-                      <ProgressBar
-                        percentage={row.pct}
-                        colorClass={
-                          row.pct >= 75
-                            ? "bg-[#087f80]"
-                            : row.pct >= 40
-                            ? "bg-[#1557b0]"
-                            : "bg-amber-500"
-                        }
-                      />
-                    </div>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      {row.docsCount} berkas bukti
-                    </p>
-                  </td>
-                  <td className="px-4 py-4" data-node-id="4:3770">
-                    {row.pct === 100 ? (
-                      <Badge variant="success">Lengkap Terisi</Badge>
-                    ) : row.pct > 0 ? (
-                      <Badge variant="secondary">
-                        {row.verifiedInds} Terverifikasi
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">Belum Diisi</Badge>
-                    )}
-                  </td>
-                  <td
-                    className="whitespace-nowrap px-5 py-4 text-right"
-                    data-node-id="4:3773"
-                  >
-                    <div className="inline-flex flex-col items-end gap-1.5">
-                      {canUpload && row.firstInd && (
-                        <button
-                          type="button"
-                          onClick={() => openUploadModal(row.firstInd)}
-                          className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1557b0] hover:underline dark:text-blue-400"
-                          data-node-id="4:3774"
-                        >
-                          <Upload className="h-3.5 w-3.5" />
-                          <span>Unggah bukti</span>
-                        </button>
-                      )}
-                      {row.firstDoc ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPreviewDoc({
-                              id: row.firstDoc.id,
-                              originalName: row.firstDoc.originalName,
-                              filePath: row.firstDoc.filePath,
-                              mimeType: row.firstDoc.mimeType,
-                              fileSize: row.firstDoc.fileSize,
-                              targetLevel: row.firstDoc.targetLevel,
-                              pageNumber: row.firstDoc.pageNumber,
-                              description: row.firstDoc.description,
-                              indicatorCode: `Domain ${row.domain.code}`,
-                              opdName: selectedOpd.name,
-                            })
-                          }
-                          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-600 hover:text-[#10345b] dark:text-slate-300"
-                          data-node-id="4:3777"
-                        >
-                          <FolderOpen className="h-3.5 w-3.5 text-[#087f80]" />
-                          <span>Lihat bukti ({row.docsCount})</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedDomainFilter(row.domain.code)
-                          }
-                          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-500 hover:text-[#10345b]"
-                        >
-                          <FolderOpen className="h-3.5 w-3.5" />
-                          <span>Rincian indikator</span>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Catatan bukti (Figma 4:3868) */}
-        <div
-          className="flex items-center gap-2.5 border-t border-[#e1e8f0] bg-[#f8fafc] px-5 py-3 text-[12px] text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400"
-          data-node-id="4:3868"
-        >
-          <Clock3 className="h-3.5 w-3.5 text-[#087f80]" />
-          <span>
-            Pembaruan bukti dukung dan skor kematangan disimpan secara waktu
-            nyata (real-time) pada basis data PostgreSQL SIGAP BERAU.
-          </span>
-        </div>
-      </div>
-
-      {/* Comprehensive Hierarchical Data Table: 5 Domains -> 19 Aspects -> 38 Indicators */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#e1e8f0] bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-          <div>
-            <h2 className="text-[17px] font-bold text-[#142b45] dark:text-white">
-              Tabel Hierarki Penilaian 38 Indikator Resmi EPSS
-            </h2>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400">
-              Klik pada tombol <strong>Unggah / Ganti Bukti</strong> untuk
-              mengelola dokumen OPD, atau <strong>Nilai & Komentar</strong>{" "}
-              untuk menetapkan skor Tingkat Kematangan (Skala 1–5).
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Cari kode (mis. 10101) atau indikator..."
-                className="h-[36px] w-[240px] rounded-[8px] border border-[#e1e8f0] bg-white pl-9 pr-3 text-[12px] focus:border-[#1557b0] focus:outline-none dark:border-slate-700 dark:bg-slate-800"
-              />
+      {/* Satu Tabel Utuh Bertingkat (Tree-Table: Domain ▸ Aspek ▸ Indikator) */}
+      <div className="overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        {/* Bilah Kontrol Atas: Pencarian, Filter Status, Filter Domain, & Kontrol Tingkatan */}
+        <div className="border-b border-[#e1e8f0] p-4 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[16px] font-bold text-[#142b45] dark:text-white">
+                Tabel Bertingkat Penilaian EPSS (Domain ▸ Aspek ▸ Indikator)
+              </h2>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                Klik pada baris <strong>Domain</strong> atau{" "}
+                <strong>Aspek</strong> untuk membuka/menutup tingkatan di
+                bawahnya.
+              </p>
             </div>
 
-            <select
-              value={selectedDomainFilter}
-              onChange={(e) => setSelectedDomainFilter(e.target.value)}
-              className="h-[36px] rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] font-medium dark:border-slate-700 dark:bg-slate-800"
-            >
-              <option value="ALL">Semua Domain (1–5)</option>
-              {domains.map((d) => (
-                <option key={d.code} value={d.code}>
-                  Domain {d.code} — {d.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari kode (10101) atau nama..."
+                  className="h-[34px] w-[210px] rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] pl-9 pr-3 text-[12px] focus:border-[#1557b0] focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800"
+                />
+              </div>
 
-            <select
-              value={selectedStatusFilter}
-              onChange={(e) => setSelectedStatusFilter(e.target.value)}
-              className="h-[36px] rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] font-medium dark:border-slate-700 dark:bg-slate-800"
+              <select
+                value={selectedStatusFilter}
+                onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                className="h-[34px] rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] px-2.5 text-[12px] font-medium focus:border-[#1557b0] focus:outline-none dark:border-slate-700 dark:bg-slate-800"
+              >
+                <option value="ALL">Semua Status</option>
+                <option value="TERVERIFIKASI">Terverifikasi BPS</option>
+                <option value="MENUNGGU_PERIKSA">Menunggu Periksa</option>
+                <option value="REVISI">Perlu Revisi</option>
+                <option value="BELUM_DIISI">Belum Diisi</option>
+              </select>
+
+              {/* Kontrol Buka/Tutup Tingkatan Hierarki */}
+              <div className="inline-flex items-center rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] p-0.5 text-[11px] font-semibold dark:border-slate-700 dark:bg-slate-800">
+                <button
+                  type="button"
+                  onClick={collapseToDomains}
+                  className={`rounded-[6px] px-2.5 py-1 transition ${
+                    activeHierarchyLevel === 1
+                      ? "bg-[#10345b] text-white shadow-2xs dark:bg-blue-600"
+                      : "text-slate-600 hover:bg-white hover:text-[#10345b] dark:text-slate-300 dark:hover:bg-slate-700"
+                  }`}
+                  title="Tampilkan hanya ringkasan 5 Domain"
+                >
+                  Lv.1 Domain
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseToAspects}
+                  className={`rounded-[6px] px-2.5 py-1 transition ${
+                    activeHierarchyLevel === 2
+                      ? "bg-[#10345b] text-white shadow-2xs dark:bg-blue-600"
+                      : "text-slate-600 hover:bg-white hover:text-[#10345b] dark:text-slate-300 dark:hover:bg-slate-700"
+                  }`}
+                  title="Tampilkan sampai tingkat 19 Aspek"
+                >
+                  Lv.2 Aspek
+                </button>
+                <button
+                  type="button"
+                  onClick={expandAllHierarchy}
+                  className={`rounded-[6px] px-2.5 py-1 transition ${
+                    activeHierarchyLevel === 3
+                      ? "bg-[#10345b] text-white shadow-2xs dark:bg-blue-600"
+                      : "text-slate-600 hover:bg-white hover:text-[#10345b] dark:text-slate-300 dark:hover:bg-slate-700"
+                  }`}
+                  title="Buka seluruh 38 Indikator"
+                >
+                  Lv.3 Semua Indikator
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Pill Tabs Filter Cepat Domain */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-3 border-t border-[#e1e8f0] dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setSelectedDomainFilter("ALL")}
+              className={`inline-flex items-center gap-1.5 rounded-[7px] border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                selectedDomainFilter === "ALL"
+                  ? "border-[#10345b] bg-[#10345b] text-white dark:border-blue-600 dark:bg-blue-600"
+                  : "border-[#e1e8f0] bg-[#f8fafc] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              }`}
             >
-              <option value="ALL">Semua Status Indikator</option>
-              <option value="TERVERIFIKASI">Terverifikasi BPS</option>
-              <option value="MENUNGGU_PERIKSA">Menunggu Pemeriksaan</option>
-              <option value="REVISI">Perlu Revisi</option>
-              <option value="BELUM_DIISI">Belum Diisi</option>
-            </select>
+              <span>Semua Domain</span>
+              <span
+                className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                  selectedDomainFilter === "ALL"
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
+                }`}
+              >
+                {selectedOpd.filledCount}/38
+              </span>
+            </button>
+
+            {domainSummaryRows.map((row) => {
+              const isActive = selectedDomainFilter === row.domain.code;
+              return (
+                <button
+                  key={row.domain.id}
+                  type="button"
+                  onClick={() => setSelectedDomainFilter(row.domain.code)}
+                  className={`inline-flex items-center gap-1.5 rounded-[7px] border px-2.5 py-1.5 text-left text-[11px] font-semibold transition ${
+                    isActive
+                      ? "border-[#10345b] bg-[#10345b] text-white dark:border-blue-600 dark:bg-blue-600"
+                      : "border-[#e1e8f0] bg-[#f8fafc] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  }`}
+                >
+                  <span>
+                    D{row.domain.code}: {row.domain.name}
+                  </span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : row.filledInds === row.totalInds
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                        : "bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    {row.filledInds}/{row.totalInds}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {domains
-          .filter(
-            (dom) =>
-              selectedDomainFilter === "ALL" ||
-              dom.code === selectedDomainFilter
-          )
-          .map((dom) => {
-            const isExpanded = expandedDomains[dom.code] ?? true;
-
-            // Filter aspects & indicators inside domain
-            const filteredAspects = dom.aspects
-              .map((asp) => ({
-                ...asp,
-                indicators: asp.indicators.filter((ind) => {
-                  const status = ind.submission?.status || "BELUM_DIISI";
-                  const matchStatus =
-                    selectedStatusFilter === "ALL" ||
-                    status === selectedStatusFilter;
-                  const matchQuery =
-                    !searchQuery ||
-                    ind.code.includes(searchQuery) ||
-                    ind.name
-                      .toLowerCase()
-                      .includes(searchQuery.toLowerCase()) ||
-                    asp.name.toLowerCase().includes(searchQuery.toLowerCase());
-                  return matchStatus && matchQuery;
-                }),
-              }))
-              .filter((asp) => asp.indicators.length > 0);
-
-            if (filteredAspects.length === 0) return null;
-
-            return (
-              <div
-                key={dom.id}
-                className="overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white dark:border-slate-800 dark:bg-slate-900"
-              >
-                {/* Domain Header Bar */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpandedDomains((prev) => ({
-                      ...prev,
-                      [dom.code]: !isExpanded,
-                    }))
-                  }
-                  className="flex w-full items-center justify-between gap-4 bg-[#10345b] px-5 py-3.5 text-left text-white hover:bg-[#142b45]"
+        {/* Satu Tabel Utuh dengan Header Kolom Bertingkat (2 Baris thead) */}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-[13px]">
+            <thead>
+              {/* Baris Header 1: Pengelompokan Kolom Utama */}
+              <tr className="border-b border-white/15 bg-[#10345b] text-[11px] font-bold uppercase tracking-wider text-white">
+                <th
+                  rowSpan={2}
+                  className="border-r border-white/15 px-4 py-3 align-middle"
                 >
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="rounded bg-[#087f80] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider">
-                      DOMAIN {dom.code}
-                    </span>
-                    <span className="text-[15px] font-bold">{dom.name}</span>
-                    <span className="text-[12px] text-[#90dfd7]">
-                      (Bobot Domain: {dom.weight}%)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[12px] text-[#acc5df]">
-                    <span>{isExpanded ? "Ciutkan" : "Perluas"}</span>
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        isExpanded ? "rotate-180" : ""
-                      }`}
-                    />
-                  </div>
-                </button>
+                  Hierarki Evaluasi EPSS (Domain ▸ Aspek ▸ Indikator)
+                </th>
+                <th
+                  rowSpan={2}
+                  className="w-[82px] border-r border-white/15 px-2.5 py-3 text-center align-middle"
+                >
+                  Bobot
+                </th>
+                <th
+                  colSpan={2}
+                  className="border-b border-r border-white/15 bg-[#142b45] px-3 py-2 text-center"
+                >
+                  Pemenuhan Bukti Dukung OPD
+                </th>
+                <th
+                  colSpan={2}
+                  className="border-b border-r border-white/15 bg-[#087f80] px-3 py-2 text-center"
+                >
+                  Tingkat Kematangan (Level 1–5)
+                </th>
+                <th
+                  rowSpan={2}
+                  className="w-[130px] px-4 py-3 text-right align-middle"
+                >
+                  Aksi
+                </th>
+              </tr>
 
-                {isExpanded && (
-                  <div className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
-                    {filteredAspects.map((asp) => (
-                      <div key={asp.id}>
-                        {/* Aspect Subheader */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 bg-[#ebf3ff]/60 px-5 py-2.5 text-[12px] font-semibold text-[#10345b] dark:bg-slate-800/80 dark:text-blue-300">
-                          <span>
-                            Aspek {asp.code}: {asp.name}
+              {/* Baris Header 2: Sub-Kolom */}
+              <tr className="border-b border-[#cbd5e1] bg-[#f1f5f9] text-[11px] font-bold uppercase tracking-wider text-[#142b45] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <th className="w-[225px] border-r border-[#e1e8f0] px-3 py-2 dark:border-slate-700">
+                  Berkas Dokumen
+                </th>
+                <th className="w-[135px] border-r border-[#e1e8f0] px-3 py-2 text-center dark:border-slate-700">
+                  Status
+                </th>
+                <th className="w-[95px] border-r border-[#e1e8f0] px-2.5 py-2 text-center dark:border-slate-700">
+                  Mandiri OPD
+                </th>
+                <th className="w-[180px] border-r border-[#e1e8f0] px-3 py-2 dark:border-slate-700">
+                  Skor Akhir BPS
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
+              {domains
+                .filter(
+                  (dom) =>
+                    selectedDomainFilter === "ALL" ||
+                    dom.code === selectedDomainFilter
+                )
+                .map((dom) => {
+                  const isDomainExpanded = expandedDomains[dom.code] ?? true;
+
+                  const filteredAspects = dom.aspects
+                    .map((asp) => ({
+                      ...asp,
+                      indicators: asp.indicators.filter((ind) => {
+                        const status = ind.submission?.status || "BELUM_DIISI";
+                        const matchStatus =
+                          selectedStatusFilter === "ALL" ||
+                          status === selectedStatusFilter;
+                        const matchQuery =
+                          !searchQuery ||
+                          ind.code.includes(searchQuery) ||
+                          ind.name
+                            .toLowerCase()
+                            .includes(searchQuery.toLowerCase()) ||
+                          asp.name
+                            .toLowerCase()
+                            .includes(searchQuery.toLowerCase());
+                        return matchStatus && matchQuery;
+                      }),
+                    }))
+                    .filter((asp) => asp.indicators.length > 0);
+
+                  if (filteredAspects.length === 0) return null;
+
+                  // Hitung agregat tingkat Domain
+                  const allDomInds = dom.aspects.flatMap((a) => a.indicators);
+                  const domFilledCount = allDomInds.filter(
+                    (i) => i.submission && i.submission.status !== "BELUM_DIISI"
+                  ).length;
+                  const domVerifiedCount = allDomInds.filter(
+                    (i) => i.submission?.status === "TERVERIFIKASI"
+                  ).length;
+                  const domDocsCount = allDomInds.reduce(
+                    (acc, i) => acc + (i.submission?.documents.length || 0),
+                    0
+                  );
+                  const domSelfScored = allDomInds.filter(
+                    (i) => i.submission?.selfScore
+                  );
+                  const avgDomSelf =
+                    domSelfScored.length > 0
+                      ? (
+                          domSelfScored.reduce(
+                            (acc, i) => acc + (i.submission?.selfScore || 0),
+                            0
+                          ) / domSelfScored.length
+                        ).toFixed(2)
+                      : "-";
+                  const domBpsScored = allDomInds.filter(
+                    (i) => i.submission?.maturityScore
+                  );
+                  const avgDomBps =
+                    domBpsScored.length > 0
+                      ? (
+                          domBpsScored.reduce(
+                            (acc, i) =>
+                              acc + (i.submission?.maturityScore || 0),
+                            0
+                          ) / domBpsScored.length
+                        ).toFixed(2)
+                      : "-";
+
+                  return (
+                    <React.Fragment key={dom.id}>
+                      {/* TINGKAT 1: BARIS DOMAIN */}
+                      <tr
+                        onClick={() =>
+                          setExpandedDomains((prev) => ({
+                            ...prev,
+                            [dom.code]: !isDomainExpanded,
+                          }))
+                        }
+                        className="cursor-pointer bg-[#10345b]/95 text-white transition hover:bg-[#10345b] dark:bg-slate-800 dark:hover:bg-slate-750"
+                      >
+                        <td className="border-r border-white/10 px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            {isDomainExpanded ? (
+                              <ChevronDown className="h-4 w-4 shrink-0 text-[#90dfd7]" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 shrink-0 text-[#90dfd7]" />
+                            )}
+                            <span className="rounded bg-[#087f80] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                              DOMAIN {dom.code}
+                            </span>
+                            <span className="text-[13px] font-bold">
+                              {dom.name}
+                            </span>
+                            <span className="text-[11px] text-[#acc5df]">
+                              ({dom.aspects.length} Aspek · {allDomInds.length}{" "}
+                              Indikator)
+                            </span>
+                          </div>
+                        </td>
+                        <td className="border-r border-white/10 px-2.5 py-3 text-center font-mono text-[12px] font-bold text-[#90dfd7]">
+                          {dom.weight}%
+                        </td>
+                        <td className="border-r border-white/10 px-3 py-3 text-[12px] text-[#acc5df]">
+                          <span className="font-semibold text-white">
+                            {domDocsCount}
+                          </span>{" "}
+                          berkas ({domFilledCount}/{allDomInds.length} terisi)
+                        </td>
+                        <td className="border-r border-white/10 px-3 py-3 text-center">
+                          <span className="inline-block rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                            {domVerifiedCount}/{allDomInds.length} Terverifikasi
                           </span>
-                          <span>Bobot Aspek: {asp.weight}% dari Domain</span>
-                        </div>
+                        </td>
+                        <td className="border-r border-white/10 px-2.5 py-3 text-center font-mono text-[12px] font-bold text-white">
+                          {avgDomSelf}
+                        </td>
+                        <td className="border-r border-white/10 px-3 py-3 font-mono text-[12px] font-bold text-[#90dfd7]">
+                          Rata-rata: {avgDomBps}
+                        </td>
+                        <td className="px-4 py-3 text-right text-[11px] font-medium text-[#acc5df]">
+                          {isDomainExpanded ? "Tutup ▴" : "Buka ▾"}
+                        </td>
+                      </tr>
 
-                        {/* Indicators Table */}
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-[13px]">
-                            <thead>
-                              <tr className="border-b border-[#e1e8f0] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                                <th className="w-[90px] px-5 py-3">Kode</th>
-                                <th className="px-4 py-3">
-                                  Indikator & Narasi Bukti (Simbatik)
-                                </th>
-                                <th className="w-[230px] px-4 py-3">
-                                  Dokumen Bukti (.pdf/.zip/.docx)
-                                </th>
-                                <th className="w-[140px] px-4 py-3">
-                                  Status & Mandiri
-                                </th>
-                                <th className="w-[190px] px-4 py-3">
-                                  Skor Kematangan BPS (1–5)
-                                </th>
-                                <th className="w-[170px] px-5 py-3 text-right">
-                                  Tindakan
-                                </th>
+                      {/* TINGKAT 2: BARIS ASPEK */}
+                      {isDomainExpanded &&
+                        filteredAspects.map((asp) => {
+                          const isAspectExpanded =
+                            expandedAspects[asp.id] ?? true;
+                          const aspTotal = asp.indicators.length;
+                          const aspFilled = asp.indicators.filter(
+                            (i) =>
+                              i.submission &&
+                              i.submission.status !== "BELUM_DIISI"
+                          ).length;
+                          const aspVerified = asp.indicators.filter(
+                            (i) => i.submission?.status === "TERVERIFIKASI"
+                          ).length;
+                          const aspDocs = asp.indicators.reduce(
+                            (acc, i) =>
+                              acc + (i.submission?.documents.length || 0),
+                            0
+                          );
+                          const aspSelfList = asp.indicators.filter(
+                            (i) => i.submission?.selfScore
+                          );
+                          const avgAspSelf =
+                            aspSelfList.length > 0
+                              ? (
+                                  aspSelfList.reduce(
+                                    (acc, i) =>
+                                      acc + (i.submission?.selfScore || 0),
+                                    0
+                                  ) / aspSelfList.length
+                                ).toFixed(1)
+                              : "-";
+                          const aspBpsList = asp.indicators.filter(
+                            (i) => i.submission?.maturityScore
+                          );
+                          const avgAspBps =
+                            aspBpsList.length > 0
+                              ? (
+                                  aspBpsList.reduce(
+                                    (acc, i) =>
+                                      acc + (i.submission?.maturityScore || 0),
+                                    0
+                                  ) / aspBpsList.length
+                                ).toFixed(1)
+                              : "-";
+
+                          return (
+                            <React.Fragment key={asp.id}>
+                              <tr
+                                onClick={() =>
+                                  setExpandedAspects((prev) => ({
+                                    ...prev,
+                                    [asp.id]: !isAspectExpanded,
+                                  }))
+                                }
+                                className="cursor-pointer bg-[#ebf3ff]/75 text-[#10345b] transition hover:bg-[#dbeafe]/80 dark:bg-slate-800/70 dark:text-blue-200 dark:hover:bg-slate-800"
+                              >
+                                <td className="border-r border-[#e1e8f0] py-2.5 pl-8 pr-4 dark:border-slate-700">
+                                  <div className="flex items-center gap-2">
+                                    {isAspectExpanded ? (
+                                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#1557b0] dark:text-blue-400" />
+                                    ) : (
+                                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#1557b0] dark:text-blue-400" />
+                                    )}
+                                    <span className="rounded bg-[#1557b0]/15 px-1.5 py-0.5 font-mono text-[11px] font-bold text-[#1557b0] dark:bg-blue-900/60 dark:text-blue-300">
+                                      Aspek {asp.code}
+                                    </span>
+                                    <span className="text-[12px] font-bold">
+                                      {asp.name}
+                                    </span>
+                                    <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                                      ({aspTotal} Indikator)
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="border-r border-[#e1e8f0] px-2.5 py-2.5 text-center font-mono text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                                  {asp.weight}%
+                                </td>
+                                <td className="border-r border-[#e1e8f0] px-3 py-2.5 text-[11px] text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                                  {aspDocs} berkas ({aspFilled}/{aspTotal}{" "}
+                                  terisi)
+                                </td>
+                                <td className="border-r border-[#e1e8f0] px-3 py-2.5 text-center text-[11px] font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                                  {aspVerified}/{aspTotal} selesai
+                                </td>
+                                <td className="border-r border-[#e1e8f0] px-2.5 py-2.5 text-center font-mono text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-300">
+                                  {avgAspSelf}
+                                </td>
+                                <td className="border-r border-[#e1e8f0] px-3 py-2.5 font-mono text-[11px] font-semibold text-[#087f80] dark:border-slate-700 dark:text-teal-400">
+                                  Rata-rata: {avgAspBps}
+                                </td>
+                                <td className="px-4 py-2.5 text-right text-[11px] font-medium text-[#1557b0] dark:text-blue-400">
+                                  {isAspectExpanded
+                                    ? "Sembunyikan"
+                                    : "Tampilkan"}
+                                </td>
                               </tr>
-                            </thead>
-                            <tbody className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
-                              {asp.indicators.map((ind) => {
-                                const sub = ind.submission;
-                                const docs = sub?.documents || [];
-                                const officialScore = sub?.maturityScore;
-                                const selfScore = sub?.selfScore;
 
-                                return (
-                                  <tr
-                                    key={ind.id}
-                                    className="align-top hover:bg-slate-50/70 dark:hover:bg-slate-800/30"
-                                  >
-                                    {/* Code & Weight */}
-                                    <td className="px-5 py-4">
-                                      <span className="inline-block rounded bg-[#10345b]/10 px-2 py-1 font-mono text-[12px] font-bold text-[#10345b] dark:bg-blue-950 dark:text-blue-300">
-                                        {ind.code}
-                                      </span>
-                                      <p className="mt-1 text-[11px] text-slate-500">
-                                        Bobot: {ind.totalWeight.toFixed(2)}%
-                                      </p>
-                                    </td>
+                              {/* TINGKAT 3: BARIS INDIKATOR */}
+                              {isAspectExpanded &&
+                                asp.indicators.map((ind) => {
+                                  const sub = ind.submission;
+                                  const docs = sub?.documents || [];
+                                  const officialScore = sub?.maturityScore;
+                                  const selfScore = sub?.selfScore;
 
-                                    {/* Indicator Name, Rubric Button, Narrative & Reviewer Feedback */}
-                                    <td className="max-w-[360px] px-4 py-4">
-                                      <p className="font-bold text-[#142b45] dark:text-white">
-                                        {ind.name}
-                                      </p>
+                                  return (
+                                    <tr
+                                      key={ind.id}
+                                      className="align-middle bg-white hover:bg-slate-50/90 dark:bg-slate-900 dark:hover:bg-slate-800/40"
+                                    >
+                                      {/* Kolom 1: Indikator dengan Konektor Pohon Bertingkat */}
+                                      <td className="border-r border-[#e1e8f0] py-3 pl-12 pr-4 dark:border-slate-800">
+                                        <div className="flex items-start gap-2.5">
+                                          <span
+                                            className="mt-0.5 select-none font-mono text-[12px] text-slate-300 dark:text-slate-600"
+                                            aria-hidden="true"
+                                          >
+                                            └─
+                                          </span>
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="rounded bg-[#10345b]/10 px-1.5 py-0.5 font-mono text-[11px] font-bold text-[#10345b] dark:bg-blue-950 dark:text-blue-300">
+                                                {ind.code}
+                                              </span>
+                                              <span className="font-semibold text-[#142b45] dark:text-white">
+                                                {ind.name}
+                                              </span>
+                                            </div>
 
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setRubricModalIndicator(ind)
-                                        }
-                                        className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#087f80] hover:underline dark:text-teal-400"
-                                      >
-                                        <Info className="h-3 w-3" />
-                                        <span>
-                                          Lihat Rubrik Kriteria Level 1–5
-                                        </span>
-                                      </button>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2.5">
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setRubricModalIndicator(ind)
+                                                }
+                                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#087f80] hover:underline dark:text-teal-400"
+                                              >
+                                                <Info className="h-3 w-3" />
+                                                <span>Rubrik Level 1–5</span>
+                                              </button>
 
-                                      {sub?.narrative && (
-                                        <div className="mt-2.5 rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-2.5 text-[11px] leading-relaxed text-slate-600 whitespace-pre-line dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-                                          {sub.narrative}
+                                              {sub?.reviewerNotes && (
+                                                <span
+                                                  title={sub.reviewerNotes}
+                                                  className="inline-flex max-w-[300px] items-center gap-1 truncate rounded border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-800 dark:border-teal-800 dark:bg-teal-950/50 dark:text-teal-300"
+                                                >
+                                                  <MessageSquare className="h-2.5 w-2.5 shrink-0" />
+                                                  <span className="truncate">
+                                                    Pembina: {sub.reviewerNotes}
+                                                  </span>
+                                                </span>
+                                              )}
+
+                                              {sub?.narrative &&
+                                                !sub?.reviewerNotes && (
+                                                  <span
+                                                    title={sub.narrative}
+                                                    className="inline-flex max-w-[280px] items-center gap-1 truncate text-[11px] text-slate-500 dark:text-slate-400"
+                                                  >
+                                                    <FileText className="h-3 w-3 shrink-0 text-slate-400" />
+                                                    <span className="truncate">
+                                                      {sub.narrative}
+                                                    </span>
+                                                  </span>
+                                                )}
+                                            </div>
+                                          </div>
                                         </div>
-                                      )}
+                                      </td>
 
-                                      {sub?.reviewerNotes && (
-                                        <div className="mt-2 rounded-lg border border-teal-200 bg-teal-50/70 p-2.5 text-[11px] text-teal-950 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
-                                          <p className="font-bold">
-                                            Catatan Pembina Sektoral BPS:
-                                          </p>
-                                          <p className="mt-0.5">
-                                            {sub.reviewerNotes}
-                                          </p>
-                                        </div>
-                                      )}
-                                    </td>
+                                      {/* Kolom 2: Bobot Indikator */}
+                                      <td className="border-r border-[#e1e8f0] px-2.5 py-3 text-center font-mono text-[11px] text-slate-500 dark:border-slate-800">
+                                        {ind.totalWeight.toFixed(2)}%
+                                      </td>
 
-                                    {/* Uploaded Evidence Documents with PDF Viewer trigger */}
-                                    <td className="px-4 py-4">
-                                      {docs.length > 0 ? (
-                                        <div className="space-y-2">
-                                          {docs.map((doc) => (
-                                            <div
-                                              key={doc.id}
-                                              className="rounded-lg border border-[#e1e8f0] bg-white p-2 dark:border-slate-700 dark:bg-slate-800"
-                                            >
-                                              <p className="truncate text-[12px] font-semibold text-[#142b45] dark:text-white">
-                                                {doc.originalName}
-                                              </p>
-                                              <p className="text-[11px] text-slate-500">
-                                                {formatBytes(doc.fileSize)} ·{" "}
-                                                {doc.pageNumber || "Hal. 1"}
-                                              </p>
-                                              <div className="mt-1.5 flex items-center gap-2">
+                                      {/* Kolom 3: Berkas Dokumen */}
+                                      <td className="border-r border-[#e1e8f0] px-3 py-3 dark:border-slate-800">
+                                        {docs.length > 0 ? (
+                                          <div className="space-y-1">
+                                            {docs.map((doc) => (
+                                              <div
+                                                key={doc.id}
+                                                className="flex items-center justify-between gap-1.5 rounded-[6px] border border-[#e1e8f0] bg-[#f8fafc] px-2 py-1 dark:border-slate-700 dark:bg-slate-800"
+                                              >
                                                 <button
                                                   type="button"
                                                   onClick={() =>
@@ -1181,199 +1320,183 @@ export function EpssWorkspaceClient({
                                                       opdName: selectedOpd.name,
                                                     })
                                                   }
-                                                  className="inline-flex items-center gap-1 rounded bg-[#ebf3ff] px-2 py-0.5 text-[11px] font-semibold text-[#1557b0] hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300"
+                                                  className="flex min-w-0 items-center gap-1.5 text-left text-[11px] font-semibold text-[#1557b0] hover:underline dark:text-blue-400"
+                                                  title={`Pratinjau: ${doc.originalName}`}
                                                 >
-                                                  <Eye className="h-3 w-3" />
-                                                  <span>Lihat PDF</span>
+                                                  <Eye className="h-3 w-3 shrink-0" />
+                                                  <span className="truncate">
+                                                    {doc.originalName}
+                                                  </span>
                                                 </button>
                                                 <a
                                                   href={doc.filePath}
                                                   download={doc.originalName}
-                                                  className="text-[11px] font-medium text-slate-500 hover:underline"
+                                                  className="shrink-0 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                                  title={`Unduh (${formatBytes(
+                                                    doc.fileSize
+                                                  )})`}
                                                 >
-                                                  Unduh
+                                                  <Download className="h-3 w-3" />
                                                 </a>
                                               </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <span className="text-[12px] italic text-slate-400">
-                                          Belum ada berkas bukti
-                                        </span>
-                                      )}
-                                    </td>
-
-                                    {/* Status & OPD Self Score */}
-                                    <td className="px-4 py-4">
-                                      <div>{renderStatusBadge(sub?.status)}</div>
-                                      <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                                        Klaim Mandiri OPD:{" "}
-                                        <strong className="text-[#142b45] dark:text-white">
-                                          {selfScore
-                                            ? `Level ${selfScore}`
-                                            : "-"}
-                                        </strong>
-                                      </p>
-                                    </td>
-
-                                    {/* Maturity Score (Scale 1-5) — Inline interactive for Pembina / Superadmin */}
-                                    <td className="px-4 py-4">
-                                      {officialScore ? (
-                                        <div
-                                          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-bold ${
-                                            MATURITY_LEVEL_LABELS[officialScore]
-                                              ?.badgeClass || ""
-                                          }`}
-                                        >
-                                          <Award className="h-3.5 w-3.5" />
-                                          <span>
-                                            {
-                                              MATURITY_LEVEL_LABELS[
-                                                officialScore
-                                              ]?.name
-                                            }
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        <span className="text-[12px] text-slate-400">
-                                          Belum dinilai Pembina
-                                        </span>
-                                      )}
-
-                                      {canReview && (
-                                        <div className="mt-2">
-                                          <p className="text-[10px] font-semibold uppercase text-slate-400">
-                                            Input Cepat Skor (1–5):
-                                          </p>
-                                          <div className="mt-1 flex items-center gap-1">
-                                            {[1, 2, 3, 4, 5].map((lvl) => (
-                                              <button
-                                                key={lvl}
-                                                type="button"
-                                                disabled={
-                                                  inlineSavingId === ind.id
-                                                }
-                                                onClick={() =>
-                                                  handleInlineQuickScore(
-                                                    ind.id,
-                                                    lvl
-                                                  )
-                                                }
-                                                className={`h-6 w-6 rounded text-[11px] font-bold transition ${
-                                                  officialScore === lvl
-                                                    ? "bg-[#087f80] text-white"
-                                                    : "border border-[#e1e8f0] bg-white text-slate-700 hover:border-[#087f80] hover:text-[#087f80] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                                                }`}
-                                                title={`Tetapkan Tingkat Kematangan Level ${lvl}`}
-                                              >
-                                                {lvl}
-                                              </button>
                                             ))}
                                           </div>
-                                        </div>
-                                      )}
-                                    </td>
+                                        ) : (
+                                          <span className="text-[11px] text-slate-400">
+                                            Belum ada berkas
+                                          </span>
+                                        )}
+                                      </td>
 
-                                    {/* Actions Column */}
-                                    <td className="whitespace-nowrap px-5 py-4 text-right">
-                                      <div className="flex flex-col items-end gap-1.5">
-                                        {canUpload && (
-                                          <button
-                                            type="button"
-                                            onClick={() => openUploadModal(ind)}
-                                            className="inline-flex items-center gap-1.5 rounded-[7px] bg-[#10345b] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
-                                          >
-                                            <Upload className="h-3.5 w-3.5" />
-                                            <span>
-                                              {docs.length > 0
-                                                ? "Kelola / Ganti Bukti"
-                                                : "Unggah Bukti"}
+                                      {/* Kolom 4: Status Verifikasi */}
+                                      <td className="border-r border-[#e1e8f0] px-3 py-3 text-center dark:border-slate-800">
+                                        {renderStatusBadge(sub?.status)}
+                                      </td>
+
+                                      {/* Kolom 5: Mandiri OPD */}
+                                      <td className="border-r border-[#e1e8f0] px-2.5 py-3 text-center dark:border-slate-800">
+                                        {selfScore ? (
+                                          <span className="inline-block rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-[#142b45] dark:bg-slate-800 dark:text-white">
+                                            Lvl {selfScore}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[11px] text-slate-400">
+                                            -
+                                          </span>
+                                        )}
+                                      </td>
+
+                                      {/* Kolom 6: Skor Akhir BPS */}
+                                      <td className="border-r border-[#e1e8f0] px-3 py-3 dark:border-slate-800">
+                                        <div className="flex flex-col gap-1.5">
+                                          {officialScore ? (
+                                            <span
+                                              className={`inline-flex w-fit items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-bold ${
+                                                MATURITY_LEVEL_LABELS[
+                                                  officialScore
+                                                ]?.badgeClass || ""
+                                              }`}
+                                            >
+                                              <Award className="h-3 w-3" />
+                                              <span>
+                                                {
+                                                  MATURITY_LEVEL_LABELS[
+                                                    officialScore
+                                                  ]?.name
+                                                }
+                                              </span>
                                             </span>
-                                          </button>
-                                        )}
+                                          ) : (
+                                            <span className="text-[11px] text-slate-400">
+                                              Belum dinilai
+                                            </span>
+                                          )}
 
-                                        {canReview && (
-                                          <button
-                                            type="button"
-                                            onClick={() => openReviewModal(ind)}
-                                            className="inline-flex items-center gap-1.5 rounded-[7px] bg-[#087f80] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#066667]"
-                                          >
-                                            <MessageSquare className="h-3.5 w-3.5" />
-                                            <span>Nilai & Komentar</span>
-                                          </button>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                                          {canReview && (
+                                            <div className="flex items-center gap-1">
+                                              {[1, 2, 3, 4, 5].map((lvl) => (
+                                                <button
+                                                  key={lvl}
+                                                  type="button"
+                                                  disabled={
+                                                    inlineSavingId === ind.id
+                                                  }
+                                                  onClick={() =>
+                                                    handleInlineQuickScore(
+                                                      ind.id,
+                                                      lvl
+                                                    )
+                                                  }
+                                                  className={`h-5 w-5 rounded text-[10px] font-bold transition ${
+                                                    officialScore === lvl
+                                                      ? "bg-[#087f80] text-white"
+                                                      : "border border-[#e1e8f0] bg-white text-slate-600 hover:border-[#087f80] hover:text-[#087f80] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                                  }`}
+                                                  title={`Tetapkan Skor BPS Level ${lvl}`}
+                                                >
+                                                  {lvl}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+
+                                      {/* Kolom 7: Aksi */}
+                                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                                        <div className="inline-flex items-center justify-end gap-1.5">
+                                          {canUpload && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                openUploadModal(ind)
+                                              }
+                                              className={`inline-flex items-center gap-1 rounded-[6px] px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                                                docs.length > 0
+                                                  ? "border border-[#e1e8f0] bg-white text-[#142b45] hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                                                  : "bg-[#10345b] text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
+                                              }`}
+                                            >
+                                              <Upload className="h-3 w-3" />
+                                              <span>
+                                                {docs.length > 0
+                                                  ? "Ubah"
+                                                  : "Unggah"}
+                                              </span>
+                                            </button>
+                                          )}
+
+                                          {canReview && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                openReviewModal(ind)
+                                              }
+                                              className="inline-flex items-center gap-1 rounded-[6px] bg-[#087f80] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#066667]"
+                                            >
+                                              <MessageSquare className="h-3 w-3" />
+                                              <span>Nilai</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </React.Fragment>
+                          );
+                        })}
+                    </React.Fragment>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Panduan unggah dan tinjauan (Figma 4:3871) */}
-      <div
-        className="grid grid-cols-1 gap-4 lg:grid-cols-2"
-        data-node-id="4:3871"
-      >
-        <div
-          className="rounded-[12px] border border-[#e1e8f0] bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
-          data-node-id="4:3872"
-        >
-          <h3 className="text-[15px] font-bold text-[#142b45] dark:text-white">
-            Ketentuan Unggah Dokumen Bukti Dukung OPD
-          </h3>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
-            Format berkas yang diizinkan adalah <strong>.pdf</strong>,{" "}
-            <strong>.zip</strong>, atau <strong>.docx</strong> dengan batas
-            ukuran maksimum <strong>10 MB per berkas</strong>. Untuk pemenuhan
-            Level 3, dokumen kebijakan (Perbup/SOP/Juknis) wajib diunggah secara
-            utuh beserta ringkasan pasal dan halaman.
-          </p>
-          <p className="mt-2 text-[12px] font-semibold text-[#1557b0] dark:text-blue-400">
-            Validasi keamanan peladen aktif · Penyimpanan lokal terintegrasi
-          </p>
-        </div>
-
-        <div
-          className="rounded-[12px] border border-[#e1e8f0] bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
-          data-node-id="4:3876"
-        >
-          <h3 className="text-[15px] font-bold text-[#142b45] dark:text-white">
-            Kaidah Penilaian Berjenjang (Kumulatif Level 1–5)
-          </h3>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
-            Tingkat Kematangan dinilai secara kumulatif dari Level 1 (Rintisan),
-            Level 2 (Terkelola), Level 3 (Terdefinisi), Level 4 (Terpadu dan
-            Terukur), hingga Level 5 (Optimum) berdasarkan kelengkapan 2
-            kegiatan statistik sektoral.
-          </p>
-          <p className="mt-2 text-[12px] font-semibold text-[#087f80] dark:text-teal-400">
-            Rubrik resmi Petunjuk Teknis Penilaian EPSS BPS
-          </p>
-        </div>
-      </div>
-
-      {/* Modal 1: Upload / Replace / Manage Evidence Document (Operator OPD & Superadmin) */}
+      {/* Modal 1: Form Ringkas Pengisian & Unggah Bukti Dukung (Operator OPD & Superadmin) */}
       {uploadModalIndicator && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
-          <div className="my-8 w-full max-w-2xl rounded-[12px] border border-[#e1e8f0] bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="my-8 w-full max-w-xl rounded-[12px] border border-[#e1e8f0] bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] pb-4 dark:border-slate-800">
               <div>
-                <Badge variant="secondary">
-                  Indikator {uploadModalIndicator.code} ·{" "}
-                  {selectedOpd.shortName}
-                </Badge>
-                <h3 className="mt-1.5 text-[18px] font-bold text-[#142b45] dark:text-white">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">
+                    Indikator {uploadModalIndicator.code} ·{" "}
+                    {selectedOpd.shortName}
+                  </Badge>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRubricModalIndicator(uploadModalIndicator)
+                    }
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#087f80] hover:underline dark:text-teal-400"
+                  >
+                    <Info className="h-3 w-3" />
+                    <span>Lihat Kriteria Rubrik</span>
+                  </button>
+                </div>
+                <h3 className="mt-1.5 text-[17px] font-bold text-[#142b45] dark:text-white">
                   {uploadModalIndicator.name}
                 </h3>
               </div>
@@ -1400,18 +1523,18 @@ export function EpssWorkspaceClient({
               </div>
             )}
 
-            {/* Existing Documents List with Replace / Delete */}
+            {/* Daftar Berkas Terunggah Saat Ini */}
             {uploadModalIndicator.submission &&
               uploadModalIndicator.submission.documents.length > 0 && (
-                <div className="mt-4 rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-3.5 dark:border-slate-800 dark:bg-slate-800/50">
+                <div className="mt-4 rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-3 dark:border-slate-800 dark:bg-slate-800/50">
                   <p className="text-[12px] font-bold text-[#142b45] dark:text-white">
-                    Berkas Bukti Dukung Terunggah Saat Ini:
+                    Berkas Bukti Saat Ini:
                   </p>
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 space-y-1.5">
                     {uploadModalIndicator.submission.documents.map((d) => (
                       <div
                         key={d.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded border border-[#e1e8f0] bg-white px-3 py-2 text-[12px] dark:border-slate-700 dark:bg-slate-900"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded border border-[#e1e8f0] bg-white px-3 py-1.5 text-[12px] dark:border-slate-700 dark:bg-slate-900"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="h-4 w-4 shrink-0 text-[#1557b0]" />
@@ -1422,7 +1545,7 @@ export function EpssWorkspaceClient({
                             ({formatBytes(d.fileSize)})
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() =>
@@ -1430,15 +1553,13 @@ export function EpssWorkspaceClient({
                                 replaceDocId === d.id ? "" : d.id
                               )
                             }
-                            className={`rounded px-2 py-1 text-[11px] font-semibold ${
+                            className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
                               replaceDocId === d.id
                                 ? "bg-amber-500 text-white"
                                 : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
                             }`}
                           >
-                            {replaceDocId === d.id
-                              ? "Akan Diganti"
-                              : "Ganti Berkas Ini"}
+                            {replaceDocId === d.id ? "Akan Diganti" : "Ganti"}
                           </button>
                           <button
                             type="button"
@@ -1446,7 +1567,7 @@ export function EpssWorkspaceClient({
                             className="rounded p-1 text-rose-600 hover:bg-rose-50"
                             title="Hapus Dokumen"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </div>
@@ -1459,66 +1580,76 @@ export function EpssWorkspaceClient({
               onSubmit={handleUploadSubmit}
               className="mt-4 space-y-4 text-[13px]"
             >
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block font-semibold text-[#142b45] dark:text-slate-200">
-                    Klaim Tingkat Kematangan Mandiri (1–5)
-                  </label>
-                  <select
-                    value={uploadSelfScore}
-                    onChange={(e) => setUploadSelfScore(Number(e.target.value))}
-                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 font-medium dark:border-slate-700 dark:bg-slate-800"
-                  >
-                    <option value={1}>Level 1 — Rintisan</option>
-                    <option value={2}>Level 2 — Terkelola</option>
-                    <option value={3}>Level 3 — Terdefinisi</option>
-                    <option value={4}>Level 4 — Terpadu dan Terukur</option>
-                    <option value={5}>Level 5 — Optimum</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-[#142b45] dark:text-slate-200">
-                    Nomor Halaman & Pasal Rujukan
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={uploadPageRef}
-                    onChange={(e) => setUploadPageRef(e.target.value)}
-                    placeholder="Contoh: Hal. 12-18, Pasal 14 Perbup SDI"
-                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
-                  />
+              {/* Langkah 1: Pilih Level Mandiri 1-5 dengan Tombol Cepat */}
+              <div>
+                <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                  1. Pilih Klaim Tingkat Kematangan Mandiri (Level 1–5)
+                </label>
+                <div className="mt-2 grid grid-cols-5 gap-2">
+                  {[
+                    { lvl: 1, label: "Rintisan" },
+                    { lvl: 2, label: "Terkelola" },
+                    { lvl: 3, label: "Terdefinisi" },
+                    { lvl: 4, label: "Terpadu" },
+                    { lvl: 5, label: "Optimum" },
+                  ].map((item) => (
+                    <button
+                      key={item.lvl}
+                      type="button"
+                      onClick={() => setUploadSelfScore(item.lvl)}
+                      className={`flex flex-col items-center rounded-[8px] border p-2 text-center transition ${
+                        uploadSelfScore === item.lvl
+                          ? "border-[#10345b] bg-[#10345b] text-white shadow-xs dark:border-blue-600 dark:bg-blue-600"
+                          : "border-[#e1e8f0] bg-white text-[#142b45] hover:border-[#1557b0] dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      }`}
+                    >
+                      <span className="text-[14px] font-bold">
+                        Level {item.lvl}
+                      </span>
+                      <span
+                        className={`text-[10px] ${
+                          uploadSelfScore === item.lvl
+                            ? "text-[#90dfd7]"
+                            : "text-slate-500"
+                        }`}
+                      >
+                        {item.label}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
+              {/* Langkah 2: Unggah Berkas Bukti */}
               <div>
                 <label className="block font-semibold text-[#142b45] dark:text-slate-200">
-                  Pilih Berkas Bukti Dukung (.pdf, .zip, .docx — Maks. 10 MB)
+                  2. Unggah Berkas Bukti Dukung (.pdf, .zip, .docx — Maks. 10 MB)
                 </label>
                 <input
                   type="file"
                   accept=".pdf,.zip,.docx,application/pdf,application/zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="mt-1 block w-full rounded-[8px] border border-dashed border-[#1557b0] bg-[#ebf3ff]/30 p-2.5 text-[12px] file:mr-3 file:rounded-md file:border-0 file:bg-[#10345b] file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-white hover:file:bg-[#142b45] dark:border-blue-700 dark:bg-slate-800/60"
+                  className="mt-1.5 block w-full rounded-[8px] border border-dashed border-[#1557b0] bg-[#ebf3ff]/30 p-2.5 text-[12px] file:mr-3 file:rounded-md file:border-0 file:bg-[#10345b] file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-white hover:file:bg-[#142b45] dark:border-blue-700 dark:bg-slate-800/60"
                 />
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {replaceDocId
-                    ? "Mode Ganti Berkas Aktif: Berkas baru akan menggantikan dokumen yang dipilih di atas."
-                    : "Unggah berkas baru untuk ditambahkan pada indikator ini."}
-                </p>
+                {replaceDocId && (
+                  <p className="mt-1 text-[11px] font-medium text-amber-600">
+                    Mode Ganti Berkas Aktif: Berkas baru akan menggantikan dokumen yang dipilih di atas.
+                  </p>
+                )}
               </div>
 
+              {/* Langkah 3: Catatan / Keterangan Singkat (Opsional) */}
               <div>
                 <label className="block font-semibold text-[#142b45] dark:text-slate-200">
-                  Narasi Penjelasan Bukti Dukung Format Simbatik (i), (ii), (iii)
+                  3. Catatan / Keterangan Singkat{" "}
+                  <span className="font-normal text-slate-400">(Opsional)</span>
                 </label>
                 <textarea
-                  rows={4}
-                  required
+                  rows={2}
                   value={uploadNarrative}
                   onChange={(e) => setUploadNarrative(e.target.value)}
-                  className="mt-1 w-full rounded-[8px] border border-[#e1e8f0] p-3 text-[12px] leading-relaxed dark:border-slate-700 dark:bg-slate-800"
+                  placeholder="Opsional: Tambahkan keterangan singkat dokumen atau halaman rujukan bila diperlukan..."
+                  className="mt-1.5 w-full rounded-[8px] border border-[#e1e8f0] p-2.5 text-[12px] leading-relaxed focus:border-[#1557b0] focus:outline-none dark:border-slate-700 dark:bg-slate-800"
                 />
               </div>
 
@@ -1526,20 +1657,20 @@ export function EpssWorkspaceClient({
                 <button
                   type="button"
                   onClick={() => setUploadModalIndicator(null)}
-                  className="h-[40px] rounded-[8px] border border-[#e1e8f0] px-4 font-semibold"
+                  className="h-[38px] rounded-[8px] border border-[#e1e8f0] px-4 text-[12px] font-semibold"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={uploadSubmitting}
-                  className="inline-flex h-[40px] items-center gap-2 rounded-[8px] bg-[#10345b] px-5 font-semibold text-white hover:bg-[#142b45]"
+                  className="inline-flex h-[38px] items-center gap-2 rounded-[8px] bg-[#10345b] px-5 text-[12px] font-semibold text-white hover:bg-[#142b45]"
                 >
                   <Upload className="h-4 w-4" />
                   <span>
                     {uploadSubmitting
-                      ? "Mengunggah & Menyimpan..."
-                      : "Simpan & Ajukan Bukti"}
+                      ? "Menyimpan..."
+                      : "Simpan Bukti"}
                   </span>
                 </button>
               </div>

@@ -163,69 +163,79 @@ export function DashboardShell({
       {/* Persistent Collapsible Sidebar (Figma 4:3631) */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col justify-between bg-[#10345b] text-white transition-all duration-200 lg:sticky lg:top-0 lg:h-screen",
-          collapsed ? "w-[80px]" : "w-[256px]",
+          "fixed inset-y-0 left-0 z-50 flex h-screen shrink-0 flex-col overflow-hidden bg-[#10345b] text-white transition-all duration-200 lg:sticky lg:top-0",
+          collapsed ? "w-[76px]" : "w-[256px]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
         data-node-id="4:3631"
       >
-        <div className="flex flex-col gap-5 p-4">
-          {/* Identitas portal (4:3632) */}
-          <div
-            className="flex items-center justify-between gap-2 pt-2"
-            data-node-id="4:3632"
+        {/* Top Brand Header (Pinned) */}
+        <div
+          className={cn(
+            "shrink-0 border-b border-white/10 p-3.5",
+            collapsed
+              ? "flex flex-col items-center justify-center gap-2"
+              : "flex items-center justify-between gap-2"
+          )}
+          data-node-id="4:3632"
+        >
+          <Link
+            href="/dashboard"
+            className={cn(
+              "flex items-center overflow-hidden",
+              collapsed ? "justify-center" : "min-w-0 flex-1 gap-3"
+            )}
+            title="SIGAP BERAU — BPS Kabupaten Berau"
           >
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-3 overflow-hidden"
+            <div
+              className="relative flex h-[40px] w-[40px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#10345b] ring-2 ring-[#90dfd7]/50 shadow-sm"
+              data-node-id="4:3633"
             >
-              <div
-                className="relative flex h-[44px] w-[44px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#10345b] ring-2 ring-[#90dfd7]/50 shadow-sm"
-                data-node-id="4:3633"
-              >
-                <img
-                  src="/assets/logo-sigap-emblem.jpg"
-                  alt="Logo SIGAP BERAU"
-                  width={44}
-                  height={44}
-                  className="h-full w-full scale-110 object-cover"
-                />
+              <img
+                src="/assets/logo-sigap-emblem.jpg"
+                alt="Logo SIGAP BERAU"
+                width={40}
+                height={40}
+                className="h-full w-full scale-110 object-cover"
+              />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1 overflow-hidden" data-node-id="4:3637">
+                <p className="truncate text-[15px] font-extrabold tracking-tight text-white">
+                  SIGAP <span className="text-[#90dfd7]">BERAU</span>
+                </p>
+                <p className="truncate text-[11px] text-[#acc5df]">
+                  BPS Kabupaten Berau
+                </p>
               </div>
-              {!collapsed && (
-                <div className="min-w-0" data-node-id="4:3637">
-                  <p className="truncate text-[16px] font-extrabold tracking-tight text-white">
-                    SIGAP <span className="text-[#90dfd7]">BERAU</span>
-                  </p>
-                  <p className="truncate text-[11px] text-[#acc5df]">
-                    BPS Kabupaten Berau
-                  </p>
-                </div>
-              )}
-            </Link>
+            )}
+          </Link>
 
-            <button
-              type="button"
-              onClick={() => setCollapsed(!collapsed)}
-              className="hidden rounded-lg p-1.5 text-[#acc5df] hover:bg-white/10 hover:text-white lg:inline-flex"
-              title={collapsed ? "Perluas Navigasi" : "Ciutkan Navigasi"}
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )}
-            </button>
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            className="hidden shrink-0 items-center justify-center rounded-lg p-1.5 text-[#acc5df] hover:bg-white/10 hover:text-white lg:inline-flex"
+            title={collapsed ? "Perluas Navigasi" : "Ciutkan Navigasi"}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setMobileOpen(false)}
-              className="rounded-lg p-1.5 text-[#acc5df] hover:bg-white/10 hover:text-white lg:hidden"
-              aria-label="Tutup menu"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="shrink-0 rounded-lg p-1.5 text-[#acc5df] hover:bg-white/10 hover:text-white lg:hidden"
+            aria-label="Tutup menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
+        {/* Scrollable Middle Navigation Area */}
+        <div className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-3.5 py-3">
           {/* Wilayah layanan (4:3640) */}
           {!collapsed && (
             <div
@@ -235,10 +245,10 @@ export function DashboardShell({
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[#90dfd7]">
                 WILAYAH LAYANAN
               </p>
-              <p className="mt-1 text-[14px] font-semibold text-white">
+              <p className="mt-0.5 text-[13px] font-semibold text-white">
                 Kabupaten Berau
               </p>
-              <p className="mt-0.5 text-[11px] text-[#acc5df]">
+              <p className="text-[11px] text-[#acc5df]">
                 Kalimantan Timur · Kode 6405
               </p>
             </div>
@@ -247,7 +257,7 @@ export function DashboardShell({
           {/* Menu layanan (4:3644) */}
           <nav className="space-y-1" data-node-id="4:3644">
             {!collapsed && (
-              <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#acc5df]">
+              <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#acc5df]">
                 MENU LAYANAN
               </p>
             )}
@@ -264,7 +274,7 @@ export function DashboardShell({
                   onClick={() => setMobileOpen(false)}
                   title={collapsed ? item.label : undefined}
                   className={cn(
-                    "flex h-[44px] items-center gap-3 rounded-[8px] px-3 text-[13px] font-medium transition-colors",
+                    "flex h-[42px] items-center gap-3 rounded-[8px] px-3 text-[13px] font-medium transition-colors",
                     isActive
                       ? "bg-[#1557b0] text-white shadow-sm"
                       : "text-[#acc5df] hover:bg-white/10 hover:text-white",
@@ -277,63 +287,63 @@ export function DashboardShell({
               );
             })}
           </nav>
-        </div>
 
-        {/* Bottom Help & Account Menu */}
-        <div className="space-y-4 p-4">
-          {/* Bantuan pembinaan (4:3655) */}
+          {/* Bantuan pembinaan (4:3655) — inside scrollable area so it never pushes Logout off-screen */}
           {!collapsed && (
             <div
-              className="rounded-[10px] border border-white/15 bg-gradient-to-b from-white/10 to-white/5 p-3.5"
+              className="rounded-[10px] border border-white/15 bg-gradient-to-b from-white/10 to-white/5 p-3"
               data-node-id="4:3655"
             >
-              <Headset className="h-5 w-5 text-[#90dfd7]" />
-              <p className="mt-2.5 text-[13px] font-semibold text-white">
-                Bantuan Pembinaan
-              </p>
+              <div className="flex items-center gap-2">
+                <Headset className="h-4 w-4 text-[#90dfd7]" />
+                <p className="text-[12px] font-semibold text-white">
+                  Bantuan Pembinaan
+                </p>
+              </div>
               <p className="mt-1 text-[11px] leading-relaxed text-[#acc5df]">
-                Konsultasikan kendala pemenuhan bukti dukung EPSS bersama Tim
-                Pembina BPS Berau.
+                Konsultasikan kendala bukti dukung EPSS bersama Tim Pembina BPS.
               </p>
               <Link
                 href="/dashboard/pembinaan"
-                className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#90dfd7] hover:underline"
+                onClick={() => setMobileOpen(false)}
+                className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[#90dfd7] hover:underline"
               >
                 <span>Hubungi pembina</span>
                 <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
             </div>
           )}
+        </div>
 
-          {/* Menu akun (4:3662) */}
-          <div
-            className="space-y-1 border-t border-white/10 pt-3"
-            data-node-id="4:3662"
+        {/* Pinned Bottom Account & Logout Menu (Always visible on all screen heights) */}
+        <div
+          className="shrink-0 space-y-1 border-t border-white/10 bg-[#0d2b4d] p-3"
+          data-node-id="4:3662"
+        >
+          <Link
+            href="/dashboard/materi"
+            onClick={() => setMobileOpen(false)}
+            className={cn(
+              "flex items-center gap-3 rounded-[8px] px-2.5 py-2 text-[13px] text-[#acc5df] hover:bg-white/10 hover:text-white",
+              collapsed && "justify-center px-0"
+            )}
+            title="Panduan layanan"
           >
-            <Link
-              href="/dashboard/materi"
-              className={cn(
-                "flex items-center gap-3 rounded-[8px] px-2.5 py-2 text-[13px] text-[#acc5df] hover:bg-white/10 hover:text-white",
-                collapsed && "justify-center px-0"
-              )}
-              title="Panduan layanan"
-            >
-              <CircleHelp className="h-[18px] w-[18px] shrink-0" />
-              {!collapsed && <span>Panduan layanan</span>}
-            </Link>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-[8px] px-2.5 py-2 text-[13px] text-rose-300 hover:bg-rose-500/20 hover:text-rose-100",
-                collapsed && "justify-center px-0"
-              )}
-              title="Keluar dari Portal"
-            >
-              <LogOut className="h-[18px] w-[18px] shrink-0" />
-              {!collapsed && <span>Keluar</span>}
-            </button>
-          </div>
+            <CircleHelp className="h-[18px] w-[18px] shrink-0" />
+            {!collapsed && <span className="truncate">Panduan layanan</span>}
+          </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-[8px] px-2.5 py-2 text-[13px] font-semibold text-rose-300 hover:bg-rose-500/20 hover:text-rose-100",
+              collapsed && "justify-center px-0"
+            )}
+            title="Keluar dari Portal"
+          >
+            <LogOut className="h-[18px] w-[18px] shrink-0" />
+            {!collapsed && <span className="truncate">Keluar</span>}
+          </button>
         </div>
       </aside>
 
@@ -621,6 +631,15 @@ export function DashboardShell({
                   {effectiveUser.opdShortName || "BPS Kab. Berau"}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                title="Keluar dari Portal"
+                className="ml-1 inline-flex h-[36px] items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50/70 px-2.5 text-[12px] font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/50"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                <span className="hidden md:inline">Keluar</span>
+              </button>
             </div>
           </div>
         </header>
