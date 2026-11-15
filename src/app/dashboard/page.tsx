@@ -155,7 +155,7 @@ export default async function DashboardOverviewPage({
             PORTAL PEMBINAAN STATISTIK SEKTORAL · KABUPATEN BERAU
           </p>
           <h1 className="mt-1 text-[26px] font-bold tracking-tight text-[#142b45] dark:text-white">
-            Ringkasan Eksekutif SIGAP BERAU
+            Beranda SIGAP BERAU
           </h1>
           <p className="mt-1 text-[14px] text-slate-600 dark:text-slate-400">
             Selamat datang, <strong>{effectiveUser.name}</strong> (

@@ -108,7 +108,7 @@ export function DashboardShell({
   const navItems = [
     {
       href: "/dashboard",
-      label: "Ringkasan Portal",
+      label: "Beranda",
       icon: LayoutDashboard,
       exact: true,
       show: true,
