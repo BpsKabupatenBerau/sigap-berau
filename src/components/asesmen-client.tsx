@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Award,
   ChevronRight,
+  Search,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -118,6 +119,15 @@ export function AsesmenClient({
   const [selectedAssessmentId, setSelectedAssessmentId] =
     React.useState<string>(assessments[0]?.id || "");
   const [showCreateModal, setShowCreateModal] = React.useState(false);
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [categoryFilter, setCategoryFilter] = React.useState("ALL");
+  const [statusFilter, setStatusFilter] = React.useState("ALL");
+
+  // Pop-up Modal Daftar Respons OPD untuk Pembina / Superadmin
+  const [managingAssessment, setManagingAssessment] =
+    React.useState<SerializedAssessment | null>(null);
 
   // Fill Questionnaire Modal State (for Operator OPD / Superadmin)
   const [fillingAssessment, setFillingAssessment] =
@@ -439,20 +449,50 @@ export function AsesmenClient({
     }
   }
 
-  // Summary KPIs
-  const totalAssessments = assessments.length;
-  const activeCount = assessments.filter((a) => a.status === "AKTIF").length;
-  const allResponses = assessments.flatMap((a) => a.responses);
-  const submittedResponsesCount = allResponses.filter(
-    (r) => r.status === "DIKIRIM" || r.status === "DIREVIU"
-  ).length;
-  const reviewedResponsesCount = allResponses.filter(
-    (r) => r.status === "DIREVIU"
-  ).length;
+  // Filter daftar paket asesmen berdasarkan pencarian, kategori, dan status
+  const categories = Array.from(
+    new Set(assessments.map((a) => a.category))
+  );
+
+  const filteredAssessments = assessments.filter((item) => {
+    const matchQuery =
+      !searchQuery ||
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchCategory =
+      categoryFilter === "ALL" || item.category === categoryFilter;
+
+    if (!matchQuery || !matchCategory) return false;
+
+    if (statusFilter === "ALL") return true;
+    if (statusFilter === "AKTIF" || statusFilter === "DITUTUP") {
+      return item.status === statusFilter;
+    }
+
+    if (effectiveRole === "OPERATOR_OPD" && userOpd) {
+      const myResp = item.responses.find((r) => r.opdId === userOpd.id);
+      if (statusFilter === "SUDAH_DIISI") {
+        return myResp?.status === "DIKIRIM" || myResp?.status === "DIREVIU";
+      }
+      if (statusFilter === "BELUM_DIISI") {
+        return !myResp || myResp.status === "DRAF";
+      }
+    }
+
+    return true;
+  });
+
+  // Sinkronkan managingAssessment bila data ter-refresh dari server
+  const currentManagedAssessment = managingAssessment
+    ? assessments.find((a) => a.id === managingAssessment.id) ||
+      managingAssessment
+    : null;
 
   return (
-    <div className="mx-auto max-w-[1160px] space-y-6">
-      {/* Header */}
+    <div className="mx-auto max-w-[1160px] space-y-5">
+      {/* Header Ringkas */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-3xl">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#087f80] dark:text-teal-400">
@@ -462,121 +502,78 @@ export function AsesmenClient({
                 }`
               : "MANAJEMEN ASESMEN & PEMETAAN KESIAPAN OPD — PEMBINA BPS"}
           </p>
-          <h1 className="mt-1 text-[26px] font-bold tracking-tight text-[#142b45] dark:text-white">
+          <h1 className="mt-1 text-[24px] font-bold tracking-tight text-[#142b45] dark:text-white">
             {effectiveRole === "OPERATOR_OPD"
-              ? `Asesmen Kesiapan Statistik Sektoral — ${
-                  userOpd?.shortName || "Perangkat Daerah"
-                }`
+              ? `Asesmen Kesiapan — ${userOpd?.shortName || "Perangkat Daerah"}`
               : "Asesmen Diagnostik & Pemetaan Kesiapan OPD"}
           </h1>
-          <p className="mt-1 text-[14px] text-slate-600 dark:text-slate-400">
-            {effectiveRole === "OPERATOR_OPD"
-              ? "Isi instrumen asesmen dari Tim Pembina BPS Kabupaten Berau untuk memetakan kesiapan 5 domain EPSS, metadata INDAH, dan rekomendasi Romantik di instansi Anda."
-              : "Buat paket asesmen kesiapan bagi Operator OPD, pantau skor kesiapan setiap perangkat daerah, dan berikan rekomendasi tindak lanjut pembinaan."}
+          <p className="mt-1 text-[13px] text-slate-600 dark:text-slate-400">
+            Pilih kartu asesmen di bawah ini untuk mengerjakan kuesioner atau
+            memeriksa hasil melalui jendela pop-up.
           </p>
+        </div>
+
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex h-[40px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Buat Paket Asesmen Baru</span>
+          </button>
+        )}
+      </div>
+
+      {/* Bilah Pencarian & Filter */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#e1e8f0] bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cari judul atau topik paket asesmen..."
+            className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] pl-9 pr-3 text-[13px] focus:border-[#1557b0] focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800"
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {activeAssessment && (
-            <button
-              type="button"
-              onClick={() => handleExportCsv(activeAssessment)}
-              className="inline-flex h-[42px] items-center gap-2 rounded-[8px] border border-[#e1e8f0] bg-white px-4 text-[13px] font-semibold text-[#142b45] hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            >
-              <Download className="h-4 w-4 text-[#1557b0]" />
-              <span>Unduh Rekap CSV</span>
-            </button>
-          )}
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-[38px] rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] px-3 text-[12px] font-semibold text-[#142b45] focus:border-[#1557b0] focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <option value="ALL">Semua Kategori ({assessments.length})</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
 
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Buat Paket Asesmen Baru</span>
-            </button>
-          )}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-[38px] rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] px-3 text-[12px] font-semibold text-[#142b45] focus:border-[#1557b0] focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <option value="ALL">Semua Status</option>
+            <option value="AKTIF">Status: Aktif Dibuka</option>
+            <option value="DITUTUP">Status: Ditutup</option>
+            {effectiveRole === "OPERATOR_OPD" && (
+              <>
+                <option value="BELUM_DIISI">Belum Dikirim OPD</option>
+                <option value="SUDAH_DIISI">Sudah Dikirim OPD</option>
+              </>
+            )}
+          </select>
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-[12px] border border-[#e1e8f0] bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400">
-              Paket Asesmen Tersedia
-            </span>
-            <ClipboardList className="h-5 w-5 text-[#1557b0]" />
-          </div>
-          <p className="mt-3 text-[32px] font-bold leading-none text-[#142b45] dark:text-white">
-            {totalAssessments}
-          </p>
-          <p className="mt-2 text-[12px] text-slate-500 dark:text-slate-400">
-            {activeCount} paket asesmen berstatus aktif dibuka
-          </p>
-        </div>
-
-        <div className="rounded-[12px] border border-[#e1e8f0] bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400">
-              {effectiveRole === "OPERATOR_OPD"
-                ? "Status Pengisian Instansi Anda"
-                : "Total Respons OPD Masuk"}
-            </span>
-            <FileCheck2 className="h-5 w-5 text-[#087f80]" />
-          </div>
-          <p className="mt-3 text-[32px] font-bold leading-none text-[#142b45] dark:text-white">
-            {effectiveRole === "OPERATOR_OPD" && userOpd
-              ? `${
-                  assessments.filter((a) =>
-                    a.responses.some(
-                      (r) =>
-                        r.opdId === userOpd.id &&
-                        (r.status === "DIKIRIM" || r.status === "DIREVIU")
-                    )
-                  ).length
-                }/${totalAssessments}`
-              : submittedResponsesCount}
-          </p>
-          <p className="mt-2 text-[12px] text-slate-500 dark:text-slate-400">
-            {effectiveRole === "OPERATOR_OPD"
-              ? "Asesmen telah dikirim ke Pembina BPS"
-              : "Respons kuesioner OPD yang telah dikirim"}
-          </p>
-        </div>
-
-        <div className="rounded-[12px] border border-[#e1e8f0] bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400">
-              Telah Direviu Pembina BPS
-            </span>
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-          </div>
-          <p className="mt-3 text-[32px] font-bold leading-none text-[#142b45] dark:text-white">
-            {reviewedResponsesCount}
-          </p>
-          <p className="mt-2 text-[12px] text-slate-500 dark:text-slate-400">
-            Dilengkapi rekomendasi tindak lanjut pembinaan
-          </p>
-        </div>
-      </div>
-
-      {/* Assessment Selector Cards */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[16px] font-bold text-[#142b45] dark:text-white">
-            Daftar Paket Asesmen Statistik Sektoral
-          </h2>
-          <span className="text-[12px] text-slate-500">
-            Pilih paket asesmen untuk melihat rincian
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {assessments.map((item) => {
-            const isSelected = activeAssessment?.id === item.id;
+      {/* Daftar Kartu Paket Asesmen */}
+      {filteredAssessments.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {filteredAssessments.map((item) => {
             const myResponse = userOpd
               ? item.responses.find((r) => r.opdId === userOpd.id)
               : null;
@@ -592,316 +589,228 @@ export function AsesmenClient({
             return (
               <div
                 key={item.id}
-                onClick={() => setSelectedAssessmentId(item.id)}
-                className={`cursor-pointer rounded-[12px] border p-5 transition ${
-                  isSelected
-                    ? "border-[#1557b0] bg-[#ebf3ff]/40 ring-2 ring-[#1557b0]/20 dark:border-blue-500 dark:bg-blue-950/30"
-                    : "border-[#e1e8f0] bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
-                }`}
+                className="flex flex-col justify-between rounded-[12px] border border-[#e1e8f0] bg-white p-5 shadow-xs transition hover:border-[#1557b0]/50 dark:border-slate-800 dark:bg-slate-900"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        item.status === "AKTIF" ? "teal" : "secondary"
-                      }
-                    >
-                      {item.status === "AKTIF" ? "Aktif Dibuka" : "Ditutup"}
-                    </Badge>
-                    <Badge variant="outline">{item.category}</Badge>
+                <div>
+                  {/* Baris Lencana Atas */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant={
+                          item.status === "AKTIF" ? "teal" : "secondary"
+                        }
+                      >
+                        {item.status === "AKTIF" ? "Aktif Dibuka" : "Ditutup"}
+                      </Badge>
+                      <Badge variant="outline">{item.category}</Badge>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[12px] font-medium text-slate-500">
+                      <Clock className="h-3.5 w-3.5 text-[#087f80]" />
+                      <span>Batas: {formatDateId(item.dueDate)}</span>
+                    </span>
                   </div>
-                  <span className="inline-flex items-center gap-1 text-[12px] text-slate-500">
-                    <Clock className="h-3.5 w-3.5 text-[#087f80]" />
-                    <span>Batas: {formatDateId(item.dueDate)}</span>
-                  </span>
-                </div>
 
-                <h3 className="mt-3 text-[17px] font-bold text-[#142b45] dark:text-white">
-                  {item.title}
-                </h3>
-                <p className="mt-1 line-clamp-2 text-[13px] text-slate-600 dark:text-slate-400">
-                  {item.description}
-                </p>
+                  {/* Judul & Deskripsi */}
+                  <h2 className="mt-3 text-[17px] font-bold text-[#142b45] dark:text-white">
+                    {item.title}
+                  </h2>
+                  <p className="mt-1 line-clamp-2 text-[13px] text-slate-600 dark:text-slate-400">
+                    {item.description}
+                  </p>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#e1e8f0] pt-3.5 text-[12px] dark:border-slate-800">
-                  <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                  {/* Info Meta Ringkas */}
+                  <div className="mt-3 flex flex-wrap items-center gap-2.5 text-[12px] text-slate-500 dark:text-slate-400">
                     <span className="font-semibold text-[#10345b] dark:text-blue-300">
                       {item.questions.length} Pertanyaan
                     </span>
                     <span>·</span>
                     <span>
                       Sasaran:{" "}
-                      <strong>
+                      <strong className="text-slate-700 dark:text-slate-200">
                         {item.targetOpdShortName || "Seluruh OPD"}
                       </strong>
                     </span>
+                    {effectiveRole === "OPERATOR_OPD" &&
+                      myResponse?.readinessScore && (
+                        <>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-1 font-bold text-[#087f80] dark:text-teal-400">
+                            <Award className="h-3.5 w-3.5" />
+                            Skor Anda:{" "}
+                            {myResponse.readinessScore
+                              .toFixed(2)
+                              .replace(".", ",")}{" "}
+                            ({myResponse.readinessPct}%)
+                          </span>
+                        </>
+                      )}
                   </div>
 
+                  {/* Cuplikan Umpan Balik Pembina jika sudah direviu (Operator OPD) */}
+                  {effectiveRole === "OPERATOR_OPD" &&
+                    myResponse?.pembinaFeedback && (
+                      <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50/70 px-3 py-2 text-[12px] text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
+                        <p className="line-clamp-2">
+                          <strong>Catatan Pembina BPS:</strong>{" "}
+                          {myResponse.pembinaFeedback}
+                        </p>
+                      </div>
+                    )}
+
+                  {/* Bar Progres Pengumpulan untuk Pembina / Superadmin */}
+                  {canManage && (
+                    <div className="mt-3.5 rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-3 dark:border-slate-800 dark:bg-slate-800/50">
+                      <div className="flex items-center justify-between text-[12px] font-semibold">
+                        <span className="text-[#142b45] dark:text-slate-200">
+                          Progres Respons OPD: {submittedCount}/{targetedCount}{" "}
+                          OPD
+                        </span>
+                        <span className="text-[#087f80] dark:text-teal-400">
+                          {progressPct}%
+                        </span>
+                      </div>
+                      <div className="mt-1.5">
+                        <ProgressBar
+                          percentage={progressPct}
+                          colorClass={
+                            progressPct >= 70 ? "bg-[#087f80]" : "bg-[#1557b0]"
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Kartu: Status & Tombol Pop-up */}
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#e1e8f0] pt-3.5 dark:border-slate-800">
                   {effectiveRole === "OPERATOR_OPD" && userOpd ? (
-                    <div className="flex items-center gap-2">
-                      {renderResponseBadge(myResponse?.status)}
+                    <>
+                      <div>{renderResponseBadge(myResponse?.status)}</div>
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openFillModal(item, userOpd);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#10345b] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
+                        disabled={
+                          item.status !== "AKTIF" && !myResponse
+                        }
+                        onClick={() => openFillModal(item, userOpd)}
+                        className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#10345b] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#142b45] disabled:opacity-50 dark:bg-[#1557b0]"
                       >
+                        <ClipboardList className="h-3.5 w-3.5" />
                         <span>
                           {myResponse?.status === "DIKIRIM" ||
                           myResponse?.status === "DIREVIU"
-                            ? "Lihat / Perbarui Jawaban"
+                            ? "Lihat / Perbarui di Pop-up"
                             : myResponse?.status === "DRAF"
-                            ? "Lanjutkan Draf"
-                            : "Mulai Isi Asesmen"}
+                            ? "Lanjutkan Asesmen"
+                            : "Kerjakan Asesmen"}
                         </span>
-                        <ChevronRight className="h-3.5 w-3.5" />
                       </button>
-                    </div>
+                    </>
                   ) : (
-                    <div className="flex items-center gap-3">
-                      <span className="font-semibold text-[#087f80] dark:text-teal-400">
-                        {submittedCount}/{targetedCount} OPD Selesai ({progressPct}
-                        %)
-                      </span>
-                    </div>
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(item)}
+                          className="inline-flex h-[34px] items-center gap-1 rounded-[7px] border border-[#e1e8f0] bg-[#f8fafc] px-2.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                          title={
+                            item.status === "AKTIF"
+                              ? "Tutup Pengisian"
+                              : "Buka Kembali"
+                          }
+                        >
+                          {item.status === "AKTIF" ? (
+                            <>
+                              <Lock className="h-3 w-3 text-amber-600" />
+                              <span>Tutup</span>
+                            </>
+                          ) : (
+                            <>
+                              <Unlock className="h-3 w-3 text-emerald-600" />
+                              <span>Buka</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleExportCsv(item)}
+                          className="inline-flex h-[34px] items-center gap-1 rounded-[7px] border border-[#e1e8f0] bg-[#f8fafc] px-2.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                          title="Unduh Rekap CSV"
+                        >
+                          <Download className="h-3 w-3 text-[#1557b0]" />
+                          <span>CSV</span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setManagingAssessment(item)}
+                        className="inline-flex h-[34px] items-center gap-1.5 rounded-[8px] bg-[#10345b] px-3.5 text-[12px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5" />
+                        <span>Buka & Reviu Respons OPD</span>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      ) : (
+        <div className="rounded-[12px] border border-[#e1e8f0] bg-white p-10 text-center text-[13px] text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+          Tidak ada kartu paket asesmen yang sesuai dengan filter pencarian Anda.
+        </div>
+      )}
 
-      {/* Active Assessment Workspace */}
-      {activeAssessment && (
-        <div className="rounded-[12px] border border-[#e1e8f0] bg-white dark:border-slate-800 dark:bg-slate-900">
-          {/* Workspace Header */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e1e8f0] p-5 dark:border-slate-800">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#087f80]">
-                  RINCIAN PAKET ASESMEN TERPILIH
-                </span>
-                <Badge variant="secondary">
-                  {activeAssessment.questions.length} Butir Instrumen
-                </Badge>
+      {/* POP-UP MODAL DAFTAR RESPONS OPD (Untuk Pembina Sektoral & Superadmin) */}
+      {currentManagedAssessment && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
+          <div className="my-8 flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] bg-[#10345b] px-6 py-4 text-white">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="teal">
+                    {currentManagedAssessment.category}
+                  </Badge>
+                  <span className="text-[11px] text-[#90dfd7]">
+                    {currentManagedAssessment.questions.length} Pertanyaan ·
+                    Batas: {formatDateId(currentManagedAssessment.dueDate)}
+                  </span>
+                </div>
+                <h3 className="mt-1 text-[18px] font-bold text-white">
+                  {currentManagedAssessment.title}
+                </h3>
               </div>
-              <h2 className="mt-1 text-[19px] font-bold text-[#142b45] dark:text-white">
-                {activeAssessment.title}
-              </h2>
-              <p className="mt-0.5 text-[12px] text-slate-500">
-                Disusun oleh: {activeAssessment.createdByName} · Tenggat:{" "}
-                {formatDateId(activeAssessment.dueDate)}
-              </p>
+              <button
+                type="button"
+                onClick={() => setManagingAssessment(null)}
+                className="rounded-lg p-1.5 text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
-            {canManage && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleToggleStatus(activeAssessment)}
-                  className="inline-flex h-[38px] items-center gap-1.5 rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] px-3.5 text-[12px] font-semibold text-[#142b45] hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                >
-                  {activeAssessment.status === "AKTIF" ? (
-                    <>
-                      <Lock className="h-3.5 w-3.5 text-amber-600" />
-                      <span>Tutup Pengisian</span>
-                    </>
-                  ) : (
-                    <>
-                      <Unlock className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>Buka Kembali Asesmen</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Role-Specific Body: Operator OPD vs Pembina / Superadmin */}
-          {effectiveRole === "OPERATOR_OPD" && userOpd ? (
-            <div className="p-5 space-y-5">
-              {(() => {
-                const myResp = activeAssessment.responses.find(
-                  (r) => r.opdId === userOpd.id
-                );
-
-                return (
-                  <>
-                    {/* Operator Status & Score Banner */}
-                    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[10px] border border-[#d0e2ff] bg-[#ebf3ff]/60 p-4 dark:border-blue-900 dark:bg-blue-950/40">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-bold text-[#10345b] dark:text-blue-200">
-                            Status Asesmen {userOpd.name}:
-                          </span>
-                          {renderResponseBadge(myResp?.status)}
-                        </div>
-                        <p className="text-[12px] text-slate-600 dark:text-slate-300">
-                          {myResp?.submittedAt
-                            ? `Terakhir dikirim pada ${formatDateId(
-                                myResp.submittedAt
-                              )}`
-                            : "Silakan lengkapi seluruh butir pertanyaan di bawah ini dan kirimkan kepada Pembina Sektoral BPS."}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3">
-                        {myResp?.readinessScore && (
-                          <div className="rounded-lg bg-white px-3.5 py-2 text-right shadow-2xs dark:bg-slate-900">
-                            <p className="text-[10px] font-semibold uppercase text-slate-400">
-                              Skor Kesiapan Instansi
-                            </p>
-                            <p className="text-[16px] font-bold text-[#087f80] dark:text-teal-400">
-                              Level{" "}
-                              {myResp.readinessScore
-                                .toFixed(2)
-                                .replace(".", ",")}{" "}
-                              ({myResp.readinessPct}%)
-                            </p>
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openFillModal(activeAssessment, userOpd)
-                          }
-                          className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
-                        >
-                          <ClipboardList className="h-4 w-4" />
-                          <span>
-                            {myResp
-                              ? "Perbarui / Lihat Jawaban Anda"
-                              : "Mulai Isi Kuesioner Asesmen"}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Pembina Feedback Box if Reviewed */}
-                    {myResp?.pembinaFeedback && (
-                      <div className="rounded-[10px] border border-teal-200 bg-teal-50/80 p-4 dark:border-teal-800 dark:bg-teal-950/40">
-                        <div className="flex items-center gap-2 text-teal-900 dark:text-teal-200">
-                          <MessageSquare className="h-4 w-4 text-[#087f80]" />
-                          <h4 className="text-[14px] font-bold">
-                            Rekomendasi & Catatan Pembina Sektoral BPS
-                          </h4>
-                        </div>
-                        <p className="mt-1.5 text-[13px] leading-relaxed text-teal-950 dark:text-teal-100">
-                          {myResp.pembinaFeedback}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* List of Questions & Current OPD Answers */}
-                    <div className="space-y-3">
-                      <h3 className="text-[15px] font-bold text-[#142b45] dark:text-white">
-                        Daftar Butir Pertanyaan & Jawaban Instansi Anda
-                      </h3>
-                      {activeAssessment.questions.map((q) => {
-                        const ans = myResp?.answers.find(
-                          (a) => a.questionId === q.id
-                        );
-                        return (
-                          <div
-                            key={q.id}
-                            className="rounded-[10px] border border-[#e1e8f0] bg-[#f8fafc]/70 p-4 dark:border-slate-800 dark:bg-slate-800/40"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#10345b] text-[11px] font-bold text-white">
-                                  {q.order}
-                                </span>
-                                <Badge variant="secondary">{q.domainCode}</Badge>
-                                {q.indicatorRef && (
-                                  <span className="text-[11px] font-mono font-semibold text-slate-500">
-                                    Rujukan Indikator {q.indicatorRef}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[11px] font-medium text-slate-400">
-                                Bobot: {q.weight}
-                              </span>
-                            </div>
-
-                            <p className="mt-2 text-[14px] font-semibold text-[#142b45] dark:text-white">
-                              {q.questionText}
-                            </p>
-                            {q.helpText && (
-                              <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                                {q.helpText}
-                              </p>
-                            )}
-
-                            <div className="mt-3 rounded-lg border border-[#e1e8f0] bg-white p-3 text-[12px] dark:border-slate-700 dark:bg-slate-900">
-                              {ans ? (
-                                <div className="space-y-1">
-                                  {q.questionType === "SCALE_1_5" &&
-                                    ans.scaleValue && (
-                                      <p className="font-bold text-[#087f80] dark:text-teal-400">
-                                        Pilihan:{" "}
-                                        {SCALE_LABELS[ans.scaleValue]?.title}
-                                      </p>
-                                    )}
-                                  {q.questionType === "YES_NO" &&
-                                    ans.yesNoValue && (
-                                      <p className="font-bold text-[#10345b] dark:text-blue-300">
-                                        Jawaban:{" "}
-                                        {ans.yesNoValue === "YA"
-                                          ? "YA (Sudah Dilaksanakan)"
-                                          : "TIDAK (Belum Dilaksanakan)"}
-                                      </p>
-                                    )}
-                                  {ans.textAnswer && (
-                                    <p className="text-slate-600 dark:text-slate-300">
-                                      Keterangan: {ans.textAnswer}
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="italic text-slate-400">
-                                  Belum diisi — klik tombol &ldquo;Mulai Isi
-                                  Kuesioner Asesmen&rdquo; di atas.
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          ) : (
-            /* Pembina Sektoral BPS & Superadmin View: Matrix of All Targeted OPDs */
-            <div className="space-y-5 p-5">
+            <div className="flex-1 overflow-y-auto p-5">
               <div className="overflow-x-auto rounded-[10px] border border-[#e1e8f0] dark:border-slate-800">
                 <table className="w-full text-left text-[13px]">
                   <thead>
                     <tr className="border-b border-[#e1e8f0] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
-                      <th className="px-5 py-3.5">
-                        Organisasi Perangkat Daerah (OPD)
-                      </th>
-                      <th className="px-4 py-3.5">Status Pengisian</th>
-                      <th className="px-4 py-3.5">Skor Kesiapan Asesmen</th>
-                      <th className="px-4 py-3.5">
-                        Ringkasan Kendala & Rekomendasi Pembina
-                      </th>
-                      <th className="px-5 py-3.5 text-right">Tindakan</th>
+                      <th className="px-4 py-3">Perangkat Daerah (OPD)</th>
+                      <th className="px-3 py-3">Status</th>
+                      <th className="px-3 py-3">Skor Kesiapan</th>
+                      <th className="px-3 py-3">Catatan & Rekomendasi</th>
+                      <th className="px-4 py-3 text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
-                    {(activeAssessment.targetOpdId
+                    {(currentManagedAssessment.targetOpdId
                       ? opds.filter(
-                          (o) => o.id === activeAssessment.targetOpdId
+                          (o) => o.id === currentManagedAssessment.targetOpdId
                         )
                       : opds
                     ).map((opd) => {
-                      const resp = activeAssessment.responses.find(
+                      const resp = currentManagedAssessment.responses.find(
                         (r) => r.opdId === opd.id
                       );
                       return (
@@ -909,87 +818,60 @@ export function AsesmenClient({
                           key={opd.id}
                           className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
                         >
-                          <td className="px-5 py-4">
+                          <td className="px-4 py-3">
                             <p className="font-bold text-[#142b45] dark:text-white">
+                              {opd.shortName}
+                            </p>
+                            <p className="text-[11px] text-slate-500">
                               {opd.name}
                             </p>
-                            <p className="mt-0.5 text-[11px] text-slate-500">
-                              {opd.code} · {opd.shortName}
-                            </p>
                           </td>
-
-                          <td className="px-4 py-4">
+                          <td className="px-3 py-3">
                             {renderResponseBadge(resp?.status)}
-                            {resp?.submittedAt && (
-                              <p className="mt-1 text-[11px] text-slate-500">
-                                {formatDateId(resp.submittedAt)}
-                              </p>
-                            )}
                           </td>
-
-                          <td className="w-[210px] px-4 py-4">
+                          <td className="px-3 py-3">
                             {resp?.readinessScore ? (
-                              <div>
-                                <div className="flex items-center justify-between text-[12px] font-bold">
-                                  <span className="inline-flex items-center gap-1 text-[#10345b] dark:text-blue-300">
-                                    <Award className="h-3.5 w-3.5 text-[#087f80]" />
-                                    Level{" "}
-                                    {resp.readinessScore
-                                      .toFixed(2)
-                                      .replace(".", ",")}
-                                  </span>
-                                  <span className="text-slate-500">
-                                    {resp.readinessPct}%
-                                  </span>
-                                </div>
-                                <div className="mt-1.5">
-                                  <ProgressBar
-                                    percentage={resp.readinessPct || 0}
-                                    colorClass={
-                                      (resp.readinessPct || 0) >= 75
-                                        ? "bg-[#087f80]"
-                                        : "bg-[#1557b0]"
-                                    }
-                                  />
-                                </div>
-                              </div>
+                              <span className="font-bold text-[#087f80] dark:text-teal-400">
+                                Lvl{" "}
+                                {resp.readinessScore
+                                  .toFixed(2)
+                                  .replace(".", ",")}{" "}
+                                ({resp.readinessPct}%)
+                              </span>
                             ) : (
                               <span className="text-[12px] text-slate-400">
-                                Belum ada skor
+                                -
                               </span>
                             )}
                           </td>
-
-                          <td className="max-w-[340px] px-4 py-4">
-                            {resp?.summaryNotes ? (
-                              <p className="line-clamp-2 text-[12px] text-slate-700 dark:text-slate-300">
-                                <strong>Catatan OPD:</strong> {resp.summaryNotes}
+                          <td className="max-w-[260px] px-3 py-3 text-[12px]">
+                            {resp?.pembinaFeedback ? (
+                              <p className="line-clamp-2 text-[#087f80] dark:text-teal-400">
+                                <strong>BPS:</strong> {resp.pembinaFeedback}
+                              </p>
+                            ) : resp?.summaryNotes ? (
+                              <p className="line-clamp-2 text-slate-600 dark:text-slate-300">
+                                {resp.summaryNotes}
                               </p>
                             ) : (
-                              <p className="text-[12px] italic text-slate-400">
-                                Belum ada jawaban masuk dari Operator OPD
-                              </p>
-                            )}
-                            {resp?.pembinaFeedback && (
-                              <p className="mt-1 line-clamp-2 text-[11px] font-medium text-[#087f80] dark:text-teal-400">
-                                <strong>Rekomendasi BPS:</strong>{" "}
-                                {resp.pembinaFeedback}
-                              </p>
+                              <span className="text-slate-400">-</span>
                             )}
                           </td>
-
-                          <td className="whitespace-nowrap px-5 py-4 text-right">
-                            <div className="inline-flex items-center gap-2">
+                          <td className="whitespace-nowrap px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-1.5">
                               {resp && (
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    openReviewModal(activeAssessment, resp)
+                                    openReviewModal(
+                                      currentManagedAssessment,
+                                      resp
+                                    )
                                   }
-                                  className="inline-flex items-center gap-1.5 rounded-[7px] bg-[#087f80] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#066667]"
+                                  className="inline-flex items-center gap-1 rounded-[7px] bg-[#087f80] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#066667]"
                                 >
-                                  <MessageSquare className="h-3.5 w-3.5" />
-                                  <span>Periksa & Beri Rekomendasi</span>
+                                  <MessageSquare className="h-3 w-3" />
+                                  <span>Reviu</span>
                                 </button>
                               )}
 
@@ -997,11 +879,12 @@ export function AsesmenClient({
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    openFillModal(activeAssessment, opd)
+                                    openFillModal(currentManagedAssessment, opd)
                                   }
-                                  className="rounded-[7px] border border-[#e1e8f0] px-2.5 py-1.5 text-[11px] font-semibold text-[#142b45] hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200"
+                                  className="inline-flex items-center gap-1 rounded-[7px] border border-[#e1e8f0] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#142b45] hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                                 >
-                                  Isi / Ubah
+                                  <ClipboardList className="h-3 w-3" />
+                                  <span>Kerjakan</span>
                                 </button>
                               )}
                             </div>
@@ -1012,41 +895,18 @@ export function AsesmenClient({
                   </tbody>
                 </table>
               </div>
-
-              {/* Preview of Questions in this Assessment */}
-              <div className="rounded-[10px] border border-[#e1e8f0] bg-[#f8fafc] p-4 dark:border-slate-800 dark:bg-slate-800/40">
-                <h3 className="text-[14px] font-bold text-[#142b45] dark:text-white">
-                  Daftar Butir Pertanyaan dalam Paket Asesmen Ini (
-                  {activeAssessment.questions.length} Pertanyaan)
-                </h3>
-                <div className="mt-3 grid grid-cols-1 gap-2.5 md:grid-cols-2">
-                  {activeAssessment.questions.map((q) => (
-                    <div
-                      key={q.id}
-                      className="rounded-lg border border-[#e1e8f0] bg-white p-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-[#10345b] dark:text-blue-300">
-                          #{q.order} · {q.domainCode}{" "}
-                          {q.indicatorRef ? `(${q.indicatorRef})` : ""}
-                        </span>
-                        <Badge variant="outline">
-                          {q.questionType === "SCALE_1_5"
-                            ? "Skala 1–5"
-                            : q.questionType === "YES_NO"
-                            ? "Ya / Tidak"
-                            : "Isian Uraian"}
-                        </Badge>
-                      </div>
-                      <p className="mt-1.5 font-medium text-[#142b45] dark:text-slate-200">
-                        {q.questionText}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
-          )}
+
+            <div className="flex justify-end border-t border-[#e1e8f0] bg-[#f8fafc] px-6 py-3.5 dark:border-slate-800 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => setManagingAssessment(null)}
+                className="h-[38px] rounded-[8px] border border-[#e1e8f0] bg-white px-4 text-[12px] font-semibold dark:border-slate-700 dark:bg-slate-800"
+              >
+                Tutup Pop-up
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1088,6 +948,23 @@ export function AsesmenClient({
                   <span>{fillMessage}</span>
                 </div>
               )}
+
+              {(() => {
+                const existingResp = fillingAssessment.responses.find(
+                  (r) => r.opdId === fillingOpd.id
+                );
+                if (!existingResp?.pembinaFeedback) return null;
+                return (
+                  <div className="rounded-[10px] border border-teal-200 bg-teal-50/80 p-3.5 text-[12px] text-teal-950 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
+                    <p className="font-bold">
+                      Rekomendasi & Catatan Pembina Sektoral BPS:
+                    </p>
+                    <p className="mt-1 leading-relaxed">
+                      {existingResp.pembinaFeedback}
+                    </p>
+                  </div>
+                );
+              })()}
 
               {fillingAssessment.questions.map((q) => {
                 const currentAns = answerState[q.id] || {
