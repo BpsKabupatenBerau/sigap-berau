@@ -71,6 +71,7 @@ export function MateriClient({
   const [targetAudience, setTargetAudience] = React.useState("Semua OPD");
   const [domainCode, setDomainCode] = React.useState("Semua Domain");
   const [description, setDescription] = React.useState("");
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [saving, setSaving] = React.useState(false);
 
   const featured =
@@ -114,23 +115,27 @@ export function MateriClient({
     e.preventDefault();
     setSaving(true);
     try {
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("category", category);
+      formData.append("format", format);
+      formData.append("fileSize", fileSize);
+      formData.append("targetAudience", targetAudience);
+      formData.append("domainCode", domainCode);
+      formData.append("description", description);
+      if (selectedFile) {
+        formData.append("file", selectedFile);
+      }
+
       const res = await fetch("/api/materi", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          category,
-          format,
-          fileSize,
-          targetAudience,
-          domainCode,
-          description,
-        }),
+        body: formData,
       });
       if (res.ok) {
         setShowAddModal(false);
         setTitle("");
         setDescription("");
+        setSelectedFile(null);
         router.refresh();
       }
     } finally {
@@ -576,6 +581,34 @@ export function MateriClient({
                     className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-[#142b45] dark:text-slate-200">
+                  Berkas Materi (Opsional — Maks. 5 MB)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.xlsx,.pptx,.zip"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] || null;
+                    setSelectedFile(f);
+                    if (f) {
+                      const ext = f.name.split(".").pop()?.toUpperCase();
+                      if (
+                        ext &&
+                        ["PDF", "DOCX", "XLSX", "PPTX", "ZIP"].includes(ext)
+                      ) {
+                        setFormat(ext);
+                      }
+                      const mb = (f.size / (1024 * 1024))
+                        .toFixed(1)
+                        .replace(".", ",");
+                      setFileSize(`${mb} MB`);
+                    }
+                  }}
+                  className="mt-1 block w-full rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] p-2 text-[12px] text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-[#10345b] file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-white hover:file:bg-[#142b45] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                />
               </div>
 
               <div>

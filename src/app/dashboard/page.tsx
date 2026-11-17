@@ -215,7 +215,7 @@ export default async function DashboardOverviewPage({
             </h2>
             <p className="text-[13px] text-[#acc5df]">
               {effectiveUser.role === "OPERATOR_OPD"
-                ? "Unggah dokumen bukti dukung (.pdf, .zip, .docx maks. 10MB) untuk 38 indikator resmi beserta narasi Simbatik (i)-(ii)-(iii)."
+                ? "Unggah dokumen bukti dukung (.pdf, .zip, .docx maks. 5MB) untuk 38 indikator resmi beserta narasi Simbatik (i)-(ii)-(iii)."
                 : "Tinjau progres pengajuan seluruh OPD Kabupaten Berau, buka pratinjau PDF bukti dukung, dan tetapkan skor Tingkat Kematangan (Level 1–5)."}
             </p>
           </div>

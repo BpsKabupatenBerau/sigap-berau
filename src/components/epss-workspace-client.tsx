@@ -308,12 +308,12 @@ export function EpssWorkspaceClient({
     setUploadSuccess(null);
 
     if (uploadFile) {
-      const maxBytes = 10 * 1024 * 1024;
+      const maxBytes = 5 * 1024 * 1024;
       if (uploadFile.size > maxBytes) {
         setUploadError(
           `Ukuran berkas (${formatBytes(
             uploadFile.size
-          )}) melebihi batas maksimum 10 MB per berkas.`
+          )}) melebihi batas maksimum 5 MB per berkas.`
         );
         return;
       }
@@ -1623,7 +1623,7 @@ export function EpssWorkspaceClient({
               {/* Langkah 2: Unggah Berkas Bukti */}
               <div>
                 <label className="block font-semibold text-[#142b45] dark:text-slate-200">
-                  2. Unggah Berkas Bukti Dukung (.pdf, .zip, .docx — Maks. 10 MB)
+                  2. Unggah Berkas Bukti Dukung (.pdf, .zip, .docx — Maks. 5 MB)
                 </label>
                 <input
                   type="file"

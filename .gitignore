@@ -3,7 +3,9 @@ node_modules
 out
 *.db
 *.db-journal
-.env.local
+.env
+.env.*
+!.env.example
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
