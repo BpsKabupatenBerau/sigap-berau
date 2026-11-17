@@ -8,11 +8,16 @@ import {
   FileSpreadsheet,
   Presentation,
   Files,
-  Users,
-  ArrowRight,
+  Folder,
+  FolderOpen,
   Download,
+  Eye,
   Plus,
+  Trash2,
   X,
+  BookOpen,
+  Scale,
+  GraduationCap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -36,14 +41,54 @@ export interface MaterialItem {
   publishedLabel: string;
 }
 
-const CATEGORIES = [
-  "Semua Materi",
-  "Panduan EPSS",
-  "Regulasi & Kebijakan",
-  "Standar Data & Metadata",
-  "Template & Instrumen",
-  "Materi Sosialisasi",
+export type FolderKey = "Modul Pembinaan" | "Panduan EPSS" | "Regulasi";
+
+interface FolderDefinition {
+  key: FolderKey;
+  title: string;
+  subtitle: string;
+  accentColor: string;
+  iconBg: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const FOLDERS: FolderDefinition[] = [
+  {
+    key: "Modul Pembinaan",
+    title: "Modul Pembinaan",
+    subtitle: "Materi sosialisasi, modul bimbingan teknis, template SOP, dan instrumen metadata",
+    accentColor: "text-[#1557b0] dark:text-blue-400",
+    iconBg: "bg-[#ebf3ff] text-[#1557b0] dark:bg-blue-950/70 dark:text-blue-300",
+    icon: GraduationCap,
+  },
+  {
+    key: "Panduan EPSS",
+    title: "Panduan EPSS",
+    subtitle: "Petunjuk teknis penilaian 38 indikator, spesifikasi bukti dukung, dan contoh paket bukti",
+    accentColor: "text-[#087f80] dark:text-teal-400",
+    iconBg: "bg-teal-50 text-[#087f80] dark:bg-teal-950/70 dark:text-teal-300",
+    icon: BookOpen,
+  },
+  {
+    key: "Regulasi",
+    title: "Regulasi",
+    subtitle: "Peraturan BPS, Perpres/Perbup Satu Data Indonesia, dan SK penyelenggaraan statistik",
+    accentColor: "text-amber-700 dark:text-amber-400",
+    iconBg: "bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300",
+    icon: Scale,
+  },
 ];
+
+export function resolveFolderKey(rawCategory: string): FolderKey {
+  const lower = (rawCategory || "").toLowerCase();
+  if (lower.includes("regulasi") || lower.includes("kebijakan")) {
+    return "Regulasi";
+  }
+  if (lower.includes("panduan")) {
+    return "Panduan EPSS";
+  }
+  return "Modul Pembinaan";
+}
 
 export function MateriClient({
   materials,
@@ -53,48 +98,66 @@ export function MateriClient({
   canManage: boolean;
 }) {
   const router = useRouter();
+  const [activeFolder, setActiveFolder] =
+    React.useState<FolderKey>("Modul Pembinaan");
   const [search, setSearch] = React.useState("");
-  const [selectedCategory, setSelectedCategory] =
-    React.useState("Semua Materi");
-  const [selectedFormat, setSelectedFormat] = React.useState("ALL");
-  const [selectedAudience, setSelectedAudience] = React.useState("ALL");
   const [previewDoc, setPreviewDoc] = React.useState<ViewableDocument | null>(
     null
   );
   const [showAddModal, setShowAddModal] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
-  // Add Material Form
+  // Add Material Form State
   const [title, setTitle] = React.useState("");
-  const [category, setCategory] = React.useState("Panduan EPSS");
+  const [folderCategory, setFolderCategory] =
+    React.useState<FolderKey>("Modul Pembinaan");
   const [format, setFormat] = React.useState("PDF");
-  const [fileSize, setFileSize] = React.useState("2,4 MB");
-  const [targetAudience, setTargetAudience] = React.useState("Semua OPD");
-  const [domainCode, setDomainCode] = React.useState("Semua Domain");
+  const [fileSize, setFileSize] = React.useState("2,0 MB");
   const [description, setDescription] = React.useState("");
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
-  const featured =
-    materials.find((m) => m.isFeatured) || materials[0] || null;
+  // Group materials by the 3 folders
+  const folderCounts = React.useMemo(() => {
+    const counts: Record<FolderKey, number> = {
+      "Modul Pembinaan": 0,
+      "Panduan EPSS": 0,
+      Regulasi: 0,
+    };
+    for (const item of materials) {
+      const fKey = resolveFolderKey(item.category);
+      counts[fKey] += 1;
+    }
+    return counts;
+  }, [materials]);
 
-  const filtered = materials.filter((item) => {
-    const matchSearch =
-      item.title.toLowerCase().includes(search.toLowerCase()) ||
-      item.description.toLowerCase().includes(search.toLowerCase()) ||
-      item.category.toLowerCase().includes(search.toLowerCase());
+  // Materials inside the currently selected folder (or matching search)
+  const displayedMaterials = React.useMemo(() => {
+    return materials.filter((item) => {
+      const itemFolder = resolveFolderKey(item.category);
+      const matchFolder = itemFolder === activeFolder;
+      const q = search.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        item.title.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.format.toLowerCase().includes(q);
 
-    const matchCategory =
-      selectedCategory === "Semua Materi" || item.category === selectedCategory;
+      return matchFolder && matchSearch;
+    });
+  }, [materials, activeFolder, search]);
 
-    const matchFormat =
-      selectedFormat === "ALL" ||
-      item.format.toUpperCase() === selectedFormat.toUpperCase();
-
-    const matchAudience =
-      selectedAudience === "ALL" || item.targetAudience === selectedAudience;
-
-    return matchSearch && matchCategory && matchFormat && matchAudience;
-  });
+  function openAddModalForFolder(targetFolder: FolderKey) {
+    setFolderCategory(targetFolder);
+    setTitle("");
+    setDescription("");
+    setSelectedFile(null);
+    setFormat("PDF");
+    setFileSize("2,0 MB");
+    setErrorMsg(null);
+    setShowAddModal(true);
+  }
 
   function openMaterialPreview(mat: MaterialItem) {
     setPreviewDoc({
@@ -102,26 +165,29 @@ export function MateriClient({
       originalName: `${mat.title}.${mat.format.toLowerCase()}`,
       filePath: mat.fileUrl,
       mimeType:
-        mat.format === "PDF" ? "application/pdf" : "application/octet-stream",
-      fileSize: 4200000,
-      pageNumber: "Dokumen Lengkap",
+        mat.format.toUpperCase() === "PDF"
+          ? "application/pdf"
+          : "application/octet-stream",
+      fileSize: 2500000,
+      pageNumber: resolveFolderKey(mat.category),
       description: mat.description,
-      indicatorCode: mat.domainCode || "Panduan",
-      opdName: mat.targetAudience,
+      indicatorCode: resolveFolderKey(mat.category),
+      opdName: mat.targetAudience || "Semua OPD",
     });
   }
 
   async function handleCreateMaterial(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setErrorMsg(null);
     try {
       const formData = new FormData();
       formData.append("title", title);
-      formData.append("category", category);
+      formData.append("category", folderCategory);
       formData.append("format", format);
       formData.append("fileSize", fileSize);
-      formData.append("targetAudience", targetAudience);
-      formData.append("domainCode", domainCode);
+      formData.append("targetAudience", "Semua OPD");
+      formData.append("domainCode", "Semua Domain");
       formData.append("description", description);
       if (selectedFile) {
         formData.append("file", selectedFile);
@@ -131,356 +197,327 @@ export function MateriClient({
         method: "POST",
         body: formData,
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(data.error || "Gagal menyimpan materi.");
+        return;
+      }
+
+      setActiveFolder(folderCategory);
+      setShowAddModal(false);
+      setTitle("");
+      setDescription("");
+      setSelectedFile(null);
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteMaterial(id: string, matTitle: string) {
+    if (!window.confirm(`Hapus materi "${matTitle}" dari folder ini?`)) {
+      return;
+    }
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/materi?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
-        setShowAddModal(false);
-        setTitle("");
-        setDescription("");
-        setSelectedFile(null);
         router.refresh();
       }
     } finally {
-      setSaving(false);
+      setDeletingId(null);
     }
   }
 
   function renderFormatIcon(fmt: string) {
     switch (fmt.toUpperCase()) {
       case "XLSX":
-        return <FileSpreadsheet className="h-[22px] w-[22px] text-emerald-600" />;
+        return <FileSpreadsheet className="h-5 w-5 text-emerald-600" />;
       case "PPTX":
-        return <Presentation className="h-[22px] w-[22px] text-amber-600" />;
+        return <Presentation className="h-5 w-5 text-amber-600" />;
       case "ZIP":
-        return <Files className="h-[22px] w-[22px] text-[#087f80]" />;
+        return <Files className="h-5 w-5 text-[#087f80]" />;
       default:
-        return <FileText className="h-[22px] w-[22px] text-[#1557b0]" />;
+        return <FileText className="h-5 w-5 text-[#1557b0]" />;
     }
   }
 
+  const currentFolderDef =
+    FOLDERS.find((f) => f.key === activeFolder) || FOLDERS[0];
+
   return (
-    <div
-      className="mx-auto max-w-[1160px] space-y-6"
-      data-node-id="4:3376"
-    >
-      {/* Judul halaman (Figma 4:3432) */}
-      <div
-        className="flex flex-wrap items-end justify-between gap-4"
-        data-node-id="4:3432"
-      >
-        <div className="max-w-3xl" data-node-id="4:3433">
+    <div className="mx-auto max-w-[1160px] space-y-6">
+      {/* Header Halaman */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#087f80] dark:text-teal-400">
             PUSTAKA RUJUKAN STATISTIK SEKTORAL
           </p>
           <h1 className="mt-1 text-[26px] font-bold tracking-tight text-[#142b45] dark:text-white">
-            Kumpulan Materi Pembinaan & Panduan EPSS
+            Kumpulan Materi Pembinaan
           </h1>
           <p className="mt-1 text-[14px] text-slate-600 dark:text-slate-400">
-            Unduh petunjuk teknis penilaian 38 indikator EPSS, regulasi Satu
-            Data Indonesia, template SOP kualitas data, dan instrumen metadata
-            baku bagi seluruh OPD Kabupaten Berau.
+            Pilih salah satu dari 3 folder utama di bawah ini untuk mengakses atau
+            mengunggah berkas Modul Pembinaan, Panduan EPSS, dan Regulasi.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <Badge variant="teal" className="h-[28px] px-3 text-[12px]">
-            {materials.length} Referensi Resmi Tersedia
-          </Badge>
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Tambah Materi</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Exact Figma Node 4:3439: Materi pilihan */}
-      {featured && (
-        <div
-          className="bg-[#10345b] flex flex-col sm:flex-row gap-[24px] items-start sm:items-center overflow-clip p-[24px] relative rounded-[12px] w-full shadow-sm"
-          data-node-id="4:3439"
-          data-name="Materi pilihan"
-        >
-          <div
-            className="bg-white flex flex-col justify-between gap-[12px] h-[114px] items-start overflow-clip p-[12px] relative rounded-[8px] shrink-0 w-[92px]"
-            data-node-id="4:3440"
-            data-name="Sampul panduan"
-          >
-            <div
-              className="bg-[#087f80] h-[4px] relative rounded-[2px] shrink-0 w-[26px]"
-              data-node-id="4:3441"
-              data-name="Garis identitas"
-            />
-            <div
-              className="font-semibold leading-[1.35] relative shrink-0 text-[#10345b] text-[10px]"
-              data-node-id="4:3442"
-            >
-              <p className="mb-0">PANDUAN</p>
-              <p className="mb-0">EPSS</p>
-              <p>2026</p>
-            </div>
-            <div
-              className="flex gap-[4px] h-[24px] items-end overflow-clip relative shrink-0"
-              data-node-id="4:3443"
-              data-name="Grafik sampul"
-            >
-              <div
-                className="bg-[#ebf3ff] relative shrink-0 size-[12px]"
-                data-node-id="4:3444"
-                data-name="Batang"
-              />
-              <div
-                className="bg-[#1557b0] h-[18px] relative shrink-0 w-[12px]"
-                data-node-id="4:3445"
-                data-name="Batang"
-              />
-              <div
-                className="bg-[#087f80] h-[24px] relative shrink-0 w-[12px]"
-                data-node-id="4:3446"
-                data-name="Batang"
-              />
-            </div>
-          </div>
-
-          <div
-            className="flex flex-1 flex-col gap-[7px] items-start leading-[1.5] min-w-0 relative"
-            data-node-id="4:3447"
-            data-name="Pengantar panduan"
-          >
-            <p
-              className="relative shrink-0 text-[#90dfd7] text-[10px] font-semibold tracking-wider uppercase"
-              data-node-id="4:3448"
-            >
-              REKOMENDASI PEMBINA
-            </p>
-            <p
-              className="relative shrink-0 text-[21px] font-bold text-white"
-              data-node-id="4:3449"
-            >
-              Mulai persiapan EPSS dari sini
-            </p>
-            <p
-              className="relative shrink-0 text-[#acc5df] text-[13px]"
-              data-node-id="4:3450"
-            >
-              Kenali lima domain evaluasi dan pelajari cara menyiapkan bukti
-              dukung yang relevan bagi instansi Anda.
-            </p>
-            <p
-              className="relative shrink-0 text-[#acc5df] text-[11px]"
-              data-node-id="4:3451"
-            >
-              Panduan persiapan · PDF · 4,2 MB · Semua OPD
-            </p>
-          </div>
-
+        {canManage && (
           <button
             type="button"
-            onClick={() => openMaterialPreview(featured)}
-            className="bg-white border border-[#e1e8f0] border-solid flex gap-[8px] h-[42px] items-center justify-center overflow-clip px-[16px] relative rounded-[8px] shrink-0 hover:bg-slate-50 transition cursor-pointer"
-            data-node-id="4:3452"
-            data-name="Tombol tindakan"
+            onClick={() => openAddModalForFolder(activeFolder)}
+            className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white transition hover:bg-[#142b45] dark:bg-[#1557b0]"
           >
-            <div
-              className="relative shrink-0 size-[16px]"
-              data-node-id="4:4026"
-              data-name="arrow-up-right"
-            >
-              <img
-                alt=""
-                width={16}
-                height={16}
-                className="block size-[16px]"
-                src="/assets/figma/arrow-up-right.svg"
-              />
-            </div>
-            <span
-              className="font-semibold leading-[1.5] relative shrink-0 text-[#142b45] text-[13px] whitespace-nowrap"
-              data-node-id="4:3454"
-            >
-              Buka panduan
-            </span>
+            <Plus className="h-4 w-4" />
+            <span>Tambah Materi ke "{activeFolder}"</span>
           </button>
-        </div>
-      )}
-
-      {/* Pencarian materi (Figma 4:3455) */}
-      <div
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        data-node-id="4:3455"
-      >
-        <div className="relative sm:col-span-2" data-node-id="4:3456">
-          <Search className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari judul panduan, nomor regulasi, SOP, atau kata kunci indikator..."
-            className="h-[42px] w-full rounded-[8px] border border-[#e1e8f0] bg-white pl-10 pr-4 text-[13px] text-[#142b45] placeholder:text-slate-400 focus:border-[#1557b0] focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white"
-          />
-        </div>
-
-        <select
-          value={selectedFormat}
-          onChange={(e) => setSelectedFormat(e.target.value)}
-          className="h-[42px] rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[13px] text-[#142b45] focus:border-[#1557b0] focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white"
-          data-node-id="4:3459"
-        >
-          <option value="ALL">Semua Format Berkas</option>
-          <option value="PDF">Dokumen PDF (.pdf)</option>
-          <option value="DOCX">Dokumen Word (.docx)</option>
-          <option value="XLSX">Lembar Kerja (.xlsx)</option>
-          <option value="PPTX">Paparan Slide (.pptx)</option>
-          <option value="ZIP">Paket Bukti (.zip)</option>
-        </select>
-
-        <select
-          value={selectedAudience}
-          onChange={(e) => setSelectedAudience(e.target.value)}
-          className="h-[42px] rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[13px] text-[#142b45] focus:border-[#1557b0] focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white"
-          data-node-id="4:3462"
-        >
-          <option value="ALL">Semua Sasaran OPD</option>
-          <option value="Semua OPD">Semua OPD</option>
-          <option value="Produsen Data">Produsen Data Sektoral</option>
-          <option value="Walidata Daerah">Walidata Daerah</option>
-        </select>
+        )}
       </div>
 
-      {/* Kategori materi pills (Figma 4:3468) */}
-      <div
-        className="flex flex-wrap items-center gap-2"
-        data-node-id="4:3468"
-      >
-        {CATEGORIES.map((cat) => {
-          const active = selectedCategory === cat;
+      {/* 3 Kartu Folder Utama */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {FOLDERS.map((folder) => {
+          const isOpen = activeFolder === folder.key;
+          const count = folderCounts[folder.key];
+          const FolderIconComponent = isOpen ? FolderOpen : Folder;
+
           return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={`h-[36px] rounded-[8px] border px-3.5 text-[12px] font-semibold transition ${
-                active
-                  ? "border-[#10345b] bg-[#10345b] text-white dark:border-blue-500 dark:bg-blue-600"
-                  : "border-[#e1e8f0] bg-white text-slate-600 hover:border-slate-300 hover:text-[#142b45] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            <div
+              key={folder.key}
+              onClick={() => setActiveFolder(folder.key)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setActiveFolder(folder.key);
+                }
+              }}
+              className={`group flex cursor-pointer flex-col justify-between rounded-[12px] border p-5 text-left transition ${
+                isOpen
+                  ? "border-[#10345b] bg-[#10345b] text-white shadow-md dark:border-blue-500 dark:bg-slate-900"
+                  : "border-[#e1e8f0] bg-white text-[#142b45] hover:border-[#1557b0]/60 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900/70 dark:text-white"
               }`}
             >
-              {cat}
-            </button>
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div
+                    className={`flex h-11 w-11 items-center justify-center rounded-[10px] ${
+                      isOpen
+                        ? "bg-white/15 text-[#90dfd7]"
+                        : folder.iconBg
+                    }`}
+                  >
+                    <FolderIconComponent className="h-6 w-6" />
+                  </div>
+
+                  <Badge
+                    variant={isOpen ? "teal" : "outline"}
+                    className={
+                      isOpen
+                        ? "bg-white/15 text-white border-white/20"
+                        : "font-semibold"
+                    }
+                  >
+                    {count} Berkas
+                  </Badge>
+                </div>
+
+                <h2
+                  className={`mt-4 text-[18px] font-bold ${
+                    isOpen ? "text-white" : "text-[#142b45] dark:text-white"
+                  }`}
+                >
+                  {folder.title}
+                </h2>
+                <p
+                  className={`mt-1 text-[12px] leading-relaxed ${
+                    isOpen
+                      ? "text-[#acc5df]"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  {folder.subtitle}
+                </p>
+              </div>
+
+              <div
+                className={`mt-4 flex items-center justify-between border-t pt-3 text-[12px] font-semibold ${
+                  isOpen
+                    ? "border-white/15 text-[#90dfd7]"
+                    : "border-slate-100 text-[#1557b0] dark:border-slate-800 dark:text-blue-400"
+                }`}
+              >
+                <span>
+                  {isOpen ? "Folder Sedang Dibuka" : "Klik untuk Buka Folder"}
+                </span>
+
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openAddModalForFolder(folder.key);
+                    }}
+                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+                      isOpen
+                        ? "bg-white text-[#10345b] hover:bg-slate-100"
+                        : "bg-[#ebf3ff] text-[#1557b0] hover:bg-blue-100 dark:bg-slate-800 dark:text-blue-300"
+                    }`}
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Isi Materi</span>
+                  </button>
+                )}
+              </div>
+            </div>
           );
         })}
       </div>
 
-      {/* Hasil pencarian (Figma 4:3483) */}
-      <div
-        className="flex items-center justify-between text-[13px] text-slate-500 dark:text-slate-400"
-        data-node-id="4:3483"
-      >
-        <span>
-          Menampilkan <strong>{filtered.length}</strong> materi pembinaan
-        </span>
-        <span>Diurutkan: Terbaru & Terpopuler</span>
-      </div>
-
-      {/* Kumpulan referensi (Figma 4:3486 — 3-column card grid) */}
-      <div
-        className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3"
-        data-node-id="4:3486"
-      >
-        {filtered.map((item) => (
-          <div
-            key={item.id}
-            className="flex flex-col justify-between rounded-[12px] border border-[#e1e8f0] bg-white p-5 transition hover:border-[#1557b0]/50 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
-            data-node-id="4:3488"
-          >
+      {/* Isi Folder Aktif */}
+      <div className="rounded-[12px] border border-[#e1e8f0] bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        {/* Baris Judul Folder & Pencarian */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e1e8f0] px-5 py-4 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <FolderOpen className="h-5 w-5 text-[#087f80] dark:text-teal-400" />
             <div>
-              {/* Format materi (4:3489) */}
-              <div
-                className="flex items-center justify-between"
-                data-node-id="4:3489"
-              >
-                <div
-                  className="flex h-[48px] w-[44px] items-center justify-center rounded-[10px] bg-[#ebf3ff]/70 dark:bg-slate-800"
-                  data-node-id="4:3490"
-                >
-                  {renderFormatIcon(item.format)}
-                </div>
-                <Badge variant="outline" className="font-bold">
-                  {item.format}
-                </Badge>
-              </div>
-
-              {/* Isi materi (4:3494) */}
-              <div className="mt-4" data-node-id="4:3494">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#087f80] dark:text-teal-400">
-                  {item.category}
-                </p>
-                <h3 className="mt-1.5 line-clamp-2 text-[15px] font-bold leading-snug text-[#142b45] dark:text-white">
-                  {item.title}
-                </h3>
-                <p className="mt-2 line-clamp-3 text-[12px] leading-relaxed text-slate-600 dark:text-slate-400">
-                  {item.description}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 pt-3 border-t border-[#e1e8f0] dark:border-slate-800">
-              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                Ukuran: {item.fileSize} · {item.domainCode || "Semua Domain"}
+              <h3 className="text-[16px] font-bold text-[#142b45] dark:text-white">
+                Isi Folder: {currentFolderDef.title}
+              </h3>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                Menampilkan {displayedMaterials.length} berkas di dalam folder{" "}
+                <strong>{currentFolderDef.title}</strong>
               </p>
-
-              {/* Akses dan pembaruan (4:3499) */}
-              <div
-                className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400"
-                data-node-id="4:3499"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5 text-[#1557b0]" />
-                  <span>{item.targetAudience}</span>
-                </span>
-                <span>{item.publishedLabel}</span>
-              </div>
-
-              {/* Tindakan materi (4:3504) */}
-              <div
-                className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800/80"
-                data-node-id="4:3504"
-              >
-                <button
-                  type="button"
-                  onClick={() => openMaterialPreview(item)}
-                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#1557b0] hover:underline dark:text-blue-400"
-                  data-node-id="4:3505"
-                >
-                  <span>Buka materi</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
-
-                <a
-                  href={item.fileUrl}
-                  download={`${item.title}.${item.format.toLowerCase()}`}
-                  className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-[#10345b] dark:hover:bg-slate-800 dark:hover:text-white"
-                  title="Unduh Materi"
-                >
-                  <Download className="h-4 w-4" />
-                </a>
-              </div>
             </div>
           </div>
-        ))}
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="relative w-full sm:w-[280px]">
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={`Cari di folder ${currentFolderDef.title}...`}
+                className="h-[36px] w-full rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] pl-9 pr-3 text-[12px] text-[#142b45] placeholder:text-slate-400 focus:border-[#1557b0] focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => openAddModalForFolder(activeFolder)}
+                className="inline-flex h-[36px] items-center gap-1.5 rounded-[8px] bg-[#087f80] px-3.5 text-[12px] font-semibold text-white hover:bg-[#066667]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Unggah ke Folder Ini</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Daftar Berkas di Dalam Folder */}
+        {displayedMaterials.length > 0 ? (
+          <div className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
+            {displayedMaterials.map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-col justify-between gap-4 px-5 py-4 transition hover:bg-slate-50/80 sm:flex-row sm:items-center dark:hover:bg-slate-800/40"
+              >
+                <div className="flex items-start gap-3.5 min-w-0">
+                  <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#ebf3ff]/70 dark:bg-slate-800">
+                    {renderFormatIcon(item.format)}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-[14px] font-bold text-[#142b45] dark:text-white">
+                        {item.title}
+                      </h4>
+                      <Badge variant="outline" className="text-[10px] font-bold">
+                        {item.format}
+                      </Badge>
+                      <span className="text-[11px] text-slate-400">
+                        {item.fileSize}
+                      </span>
+                    </div>
+
+                    {item.description && (
+                      <p className="mt-1 line-clamp-2 text-[12px] text-slate-600 dark:text-slate-400">
+                        {item.description}
+                      </p>
+                    )}
+
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Diunggah oleh {item.author} · {item.publishedLabel}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tombol Aksi Berkas */}
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openMaterialPreview(item)}
+                    className="inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] font-semibold text-[#142b45] hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <Eye className="h-3.5 w-3.5 text-[#1557b0]" />
+                    <span>Buka</span>
+                  </button>
+
+                  <a
+                    href={item.fileUrl}
+                    download={`${item.title}.${item.format.toLowerCase()}`}
+                    className="inline-flex h-[34px] items-center gap-1.5 rounded-[8px] bg-[#10345b] px-3 text-[12px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>Unduh</span>
+                  </a>
+
+                  {canManage && (
+                    <button
+                      type="button"
+                      disabled={deletingId === item.id}
+                      onClick={() => handleDeleteMaterial(item.id, item.title)}
+                      className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[8px] border border-rose-200 bg-rose-50/60 text-rose-600 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300"
+                      title="Hapus materi dari folder"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="px-6 py-12 text-center">
+            <Folder className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" />
+            <p className="mt-2 text-[14px] font-semibold text-[#142b45] dark:text-white">
+              Belum ada berkas materi di folder "{currentFolderDef.title}"
+            </p>
+            <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
+              {canManage
+                ? "Klik tombol 'Unggah ke Folder Ini' untuk memasukkan berkas baru ke dalam folder ini."
+                : "Tim Pembina BPS belum menambahkan berkas pada folder ini."}
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Modal Tambah Materi */}
+      {/* Modal Tambah Materi ke Dalam Folder (Admin & Pembina) */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
           <div className="w-full max-w-lg rounded-[12px] border border-[#e1e8f0] bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[18px] font-bold text-[#142b45] dark:text-white">
-                Tambah Materi Pembinaan Baru
-              </h3>
+            <div className="flex items-center justify-between border-b border-[#e1e8f0] pb-3 dark:border-slate-800">
+              <div>
+                <Badge variant="teal">Unggah Materi Baru</Badge>
+                <h3 className="mt-1 text-[18px] font-bold text-[#142b45] dark:text-white">
+                  Masukkan Materi ke Folder
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
@@ -490,102 +527,62 @@ export function MateriClient({
               </button>
             </div>
 
+            {errorMsg && (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-700">
+                {errorMsg}
+              </div>
+            )}
+
             <form
               onSubmit={handleCreateMaterial}
-              className="mt-4 space-y-3.5 text-[13px]"
+              className="mt-4 space-y-4 text-[13px]"
             >
+              {/* Pilihan 3 Folder Tujuan */}
               <div>
-                <label className="block font-medium text-[#142b45] dark:text-slate-200">
-                  Judul Materi / Pedoman
+                <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                  1. Pilih Folder Tujuan
+                </label>
+                <div className="mt-1.5 grid grid-cols-3 gap-2">
+                  {FOLDERS.map((f) => {
+                    const selected = folderCategory === f.key;
+                    return (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => setFolderCategory(f.key)}
+                        className={`flex flex-col items-center justify-center rounded-[8px] border p-2.5 text-center text-[12px] font-semibold transition ${
+                          selected
+                            ? "border-[#10345b] bg-[#10345b] text-white dark:border-blue-500 dark:bg-blue-600"
+                            : "border-[#e1e8f0] bg-[#f8fafc] text-[#142b45] hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        }`}
+                      >
+                        <Folder className="mb-1 h-4 w-4" />
+                        <span>{f.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Judul Materi */}
+              <div>
+                <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                  2. Judul Materi / Dokumen
                 </label>
                 <input
                   type="text"
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Contoh: Modul Penyusunan Standar Data Statistik Sektoral Daerah"
+                  placeholder="Contoh: Modul Penyusunan Metadata Statistik Sektoral"
                   className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-[#142b45] dark:text-slate-200">
-                    Kategori
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 dark:border-slate-700 dark:bg-slate-800"
-                  >
-                    {CATEGORIES.filter((c) => c !== "Semua Materi").map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-medium text-[#142b45] dark:text-slate-200">
-                    Format Berkas
-                  </label>
-                  <select
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 dark:border-slate-700 dark:bg-slate-800"
-                  >
-                    <option value="PDF">PDF</option>
-                    <option value="DOCX">DOCX</option>
-                    <option value="XLSX">XLSX</option>
-                    <option value="PPTX">PPTX</option>
-                    <option value="ZIP">ZIP</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-medium text-[#142b45] dark:text-slate-200">
-                    Ukuran Berkas
-                  </label>
-                  <input
-                    type="text"
-                    value={fileSize}
-                    onChange={(e) => setFileSize(e.target.value)}
-                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-[#142b45] dark:text-slate-200">
-                    Sasaran
-                  </label>
-                  <select
-                    value={targetAudience}
-                    onChange={(e) => setTargetAudience(e.target.value)}
-                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 dark:border-slate-700 dark:bg-slate-800"
-                  >
-                    <option value="Semua OPD">Semua OPD</option>
-                    <option value="Produsen Data">Produsen Data</option>
-                    <option value="Walidata Daerah">Walidata Daerah</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-medium text-[#142b45] dark:text-slate-200">
-                    Cakupan Domain
-                  </label>
-                  <input
-                    type="text"
-                    value={domainCode}
-                    onChange={(e) => setDomainCode(e.target.value)}
-                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
-                  />
-                </div>
-              </div>
-
+              {/* Unggah Berkas */}
               <div>
-                <label className="block font-medium text-[#142b45] dark:text-slate-200">
-                  Berkas Materi (Opsional — Maks. 5 MB)
+                <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                  3. Pilih Berkas (.pdf, .docx, .xlsx, .pptx, .zip — Maks. 5 MB)
                 </label>
                 <input
                   type="file"
@@ -594,6 +591,9 @@ export function MateriClient({
                     const f = e.target.files?.[0] || null;
                     setSelectedFile(f);
                     if (f) {
+                      if (!title.trim()) {
+                        setTitle(f.name.replace(/\.[^/.]+$/, ""));
+                      }
                       const ext = f.name.split(".").pop()?.toUpperCase();
                       if (
                         ext &&
@@ -607,38 +607,39 @@ export function MateriClient({
                       setFileSize(`${mb} MB`);
                     }
                   }}
-                  className="mt-1 block w-full rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] p-2 text-[12px] text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-[#10345b] file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-white hover:file:bg-[#142b45] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  className="mt-1 block w-full rounded-[8px] border border-dashed border-[#1557b0] bg-[#ebf3ff]/30 p-2 text-[12px] text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-[#10345b] file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-white hover:file:bg-[#142b45] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
                 />
               </div>
 
+              {/* Keterangan Singkat (Opsional) */}
               <div>
-                <label className="block font-medium text-[#142b45] dark:text-slate-200">
-                  Deskripsi Ringkas Materi
+                <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                  4. Keterangan Singkat{" "}
+                  <span className="font-normal text-slate-400">(Opsional)</span>
                 </label>
                 <textarea
-                  rows={3}
-                  required
+                  rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Jelaskan manfaat dan isi materi bagi Operator OPD..."
+                  placeholder="Tuliskan ringkasan isi berkas bila diperlukan..."
                   className="mt-1 w-full rounded-[8px] border border-[#e1e8f0] p-2.5 dark:border-slate-700 dark:bg-slate-800"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 border-t border-[#e1e8f0] pt-3 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="h-[40px] rounded-[8px] border border-[#e1e8f0] px-4 font-semibold"
+                  className="h-[38px] rounded-[8px] border border-[#e1e8f0] px-4 font-semibold"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="h-[40px] rounded-[8px] bg-[#10345b] px-5 font-semibold text-white hover:bg-[#142b45]"
+                  className="h-[38px] rounded-[8px] bg-[#10345b] px-5 font-semibold text-white hover:bg-[#142b45]"
                 >
-                  {saving ? "Menyimpan..." : "Simpan Materi"}
+                  {saving ? "Mengunggah..." : "Simpan ke Folder"}
                 </button>
               </div>
             </form>
@@ -646,7 +647,7 @@ export function MateriClient({
         </div>
       )}
 
-      {/* PDF Viewer Modal */}
+      {/* Modal Pratinjau PDF */}
       <PdfViewerModal
         document={previewDoc}
         onClose={() => setPreviewDoc(null)}
@@ -654,4 +655,3 @@ export function MateriClient({
     </div>
   );
 }
-

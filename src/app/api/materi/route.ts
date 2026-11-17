@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import {
   isSupabaseStorageConfigured,
   uploadBufferToSupabase,
+  deleteFromSupabaseByUrl,
 } from "@/lib/supabase-storage";
 
 const MAX_MATERIAL_BYTES = 5 * 1024 * 1024; // 5MB
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     const contentType = request.headers.get("content-type") || "";
 
     let title = "";
-    let category = "";
+    let category = "Modul Pembinaan";
     let format = "PDF";
     let fileSize = "2,1 MB";
     let fileUrl =
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
       title = String(formData.get("title") || "").trim();
-      category = String(formData.get("category") || "").trim();
+      category = String(formData.get("category") || "Modul Pembinaan").trim();
       format = String(formData.get("format") || "PDF").toUpperCase();
       fileSize = String(formData.get("fileSize") || "2,1 MB").trim();
       targetAudience = String(
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
     } else {
       const body = await request.json();
       title = String(body.title || "").trim();
-      category = String(body.category || "").trim();
+      category = String(body.category || "Modul Pembinaan").trim();
       format = String(body.format || "PDF").toUpperCase();
       fileSize = String(body.fileSize || "2,1 MB");
       fileUrl = String(
@@ -123,9 +124,9 @@ export async function POST(request: Request) {
       description = String(body.description || "").trim();
     }
 
-    if (!title || !category || !description) {
+    if (!title || !category) {
       return NextResponse.json(
-        { error: "Judul materi, kategori, dan deskripsi ringkas wajib diisi." },
+        { error: "Judul materi dan folder tujuan wajib diisi." },
         { status: 400 }
       );
     }
@@ -139,7 +140,9 @@ export async function POST(request: Request) {
         fileUrl,
         targetAudience,
         domainCode,
-        description,
+        description:
+          description ||
+          `Materi dalam folder ${category} diunggah oleh ${session.effectiveUser.name}.`,
         author: session.effectiveUser.name,
         publishedLabel: "Nov 2026",
       },
@@ -152,7 +155,68 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Create material error:", error);
     return NextResponse.json(
-      { error: "Gagal menambahkan materi ke repositori." },
+      { error: "Gagal menambahkan materi ke dalam folder." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await getActiveSession();
+    if (!session) {
+      return NextResponse.json(
+        { error: "Silakan masuk terlebih dahulu." },
+        { status: 401 }
+      );
+    }
+
+    if (
+      session.effectiveUser.role !== "PEMBINA_SEKTORAL" &&
+      session.effectiveUser.role !== "SUPERADMIN"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Hanya Pembina Sektoral BPS atau Superadmin yang dapat menghapus materi.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID materi tidak ditemukan." },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.learningMaterial.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Materi tidak ditemukan." },
+        { status: 404 }
+      );
+    }
+
+    if (existing.fileUrl) {
+      await deleteFromSupabaseByUrl(existing.fileUrl);
+    }
+
+    await prisma.learningMaterial.delete({ where: { id } });
+
+    return NextResponse.json({
+      success: true,
+      message: "Materi berhasil dihapus dari folder.",
+    });
+  } catch (error) {
+    console.error("Delete material error:", error);
+    return NextResponse.json(
+      { error: "Gagal menghapus materi." },
       { status: 500 }
     );
   }

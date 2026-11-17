@@ -847,7 +847,7 @@ async function main() {
     ],
   });
 
-  // 7. Seed Knowledge Base Materials (/dashboard/materi) matching Figma design
+  // 7. Seed Knowledge Base Materials (/dashboard/materi) into 3 Core Folders: Modul Pembinaan, Panduan EPSS, Regulasi
   await prisma.learningMaterial.createMany({
     data: [
       {
@@ -867,7 +867,7 @@ async function main() {
       },
       {
         title: "Peraturan BPS Nomor 3 Tahun 2022 tentang Evaluasi Penyelenggaraan Statistik Sektoral",
-        category: "Regulasi & Kebijakan",
+        category: "Regulasi",
         format: "PDF",
         fileSize: "2,8 MB",
         fileUrl: "/uploads/materi/Panduan_Persiapan_EPSS_Kabupaten_Berau_2026.pdf",
@@ -882,7 +882,7 @@ async function main() {
       },
       {
         title: "Template SOP Penyelenggaraan Statistik Sektoral & Pemeriksaan Kualitas Data OPD",
-        category: "Template & Instrumen",
+        category: "Modul Pembinaan",
         format: "DOCX",
         fileSize: "1,4 MB",
         fileUrl: "/uploads/materi/Panduan_Persiapan_EPSS_Kabupaten_Berau_2026.pdf",
@@ -897,7 +897,7 @@ async function main() {
       },
       {
         title: "Formulir Baku Metadata Statistik Kegiatan (MS-Keg), Variabel (MS-Var), dan Indikator (MS-Ind)",
-        category: "Standar Data & Metadata",
+        category: "Modul Pembinaan",
         format: "XLSX",
         fileSize: "860 KB",
         fileUrl: "/uploads/materi/Panduan_Persiapan_EPSS_Kabupaten_Berau_2026.pdf",
@@ -912,9 +912,9 @@ async function main() {
       },
       {
         title: "Paparan Strategi Akselerasi Indeks Pembangunan Statistik (IPS) Kabupaten Berau Menuju Predikat Memuaskan",
-        category: "Materi Sosialisasi",
+        category: "Modul Pembinaan",
         format: "PPTX",
-        fileSize: "5,6 MB",
+        fileSize: "4,6 MB",
         fileUrl: "/uploads/materi/Panduan_Persiapan_EPSS_Kabupaten_Berau_2026.pdf",
         targetAudience: "Semua OPD",
         domainCode: "Semua Domain",
@@ -927,7 +927,7 @@ async function main() {
       },
       {
         title: "Panduan Pengajuan Rekomendasi Kegiatan Statistik Sektoral Melalui Aplikasi Romantik BPS",
-        category: "Standar Data & Metadata",
+        category: "Panduan EPSS",
         format: "PDF",
         fileSize: "3,1 MB",
         fileUrl: "/uploads/epss/Bukti_50201_Rekomendasi_Romantik_BPS_2026.pdf",
@@ -942,9 +942,9 @@ async function main() {
       },
       {
         title: "Contoh Paket Bukti Dukung Lengkap (Notula Reviu Berkala & Laporan Tindak Lanjut Before-After)",
-        category: "Template & Instrumen",
+        category: "Panduan EPSS",
         format: "ZIP",
-        fileSize: "6,4 MB",
+        fileSize: "4,4 MB",
         fileUrl: "/uploads/epss/Bukti_10101_SDSN_Dinkes_Berau_2026.pdf",
         targetAudience: "Semua OPD",
         domainCode: "Domain 1 - 5",
