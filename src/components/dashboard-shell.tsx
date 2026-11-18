@@ -22,6 +22,7 @@ import {
   RotateCcw,
   Menu,
   X,
+  UserCog,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +78,70 @@ export function DashboardShell({
   );
 
   const { realUser, effectiveUser, isImpersonating } = session;
+
+  // Profile Edit Modal State
+  const [showProfileModal, setShowProfileModal] = React.useState(false);
+  const [profName, setProfName] = React.useState(effectiveUser.name);
+  const [profEmail, setProfEmail] = React.useState(effectiveUser.email);
+  const [profNip, setProfNip] = React.useState(effectiveUser.nip || "");
+  const [profJabatan, setProfJabatan] = React.useState(
+    effectiveUser.jabatan || ""
+  );
+  const [profPhone, setProfPhone] = React.useState(effectiveUser.phone || "");
+  const [profNewPassword, setProfNewPassword] = React.useState("");
+  const [savingProfile, setSavingProfile] = React.useState(false);
+  const [profileFeedback, setProfileFeedback] = React.useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  function openProfileModal() {
+    setProfName(effectiveUser.name);
+    setProfEmail(effectiveUser.email);
+    setProfNip(effectiveUser.nip || "");
+    setProfJabatan(effectiveUser.jabatan || "");
+    setProfPhone(effectiveUser.phone || "");
+    setProfNewPassword("");
+    setProfileFeedback(null);
+    setShowProfileModal(true);
+  }
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileFeedback(null);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profName,
+          email: profEmail,
+          nip: profNip,
+          jabatan: profJabatan,
+          phone: profPhone,
+          newPassword: profNewPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setProfileFeedback({
+          type: "error",
+          text: data.error || "Gagal memperbarui profil.",
+        });
+        return;
+      }
+
+      setProfileFeedback({
+        type: "success",
+        text: data.message || "Profil berhasil diperbarui!",
+      });
+      setProfNewPassword("");
+      router.refresh();
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   const initials = effectiveUser.name
     .split(" ")
@@ -320,6 +385,21 @@ export function DashboardShell({
           className="shrink-0 space-y-1 border-t border-white/10 bg-[#0d2b4d] p-3"
           data-node-id="4:3662"
         >
+          <button
+            type="button"
+            onClick={() => {
+              setMobileOpen(false);
+              openProfileModal();
+            }}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-[8px] px-2.5 py-2 text-[13px] text-[#acc5df] hover:bg-white/10 hover:text-white",
+              collapsed && "justify-center px-0"
+            )}
+            title="Edit Profil Saya"
+          >
+            <UserCog className="h-[18px] w-[18px] shrink-0 text-[#90dfd7]" />
+            {!collapsed && <span className="truncate">Edit Profil</span>}
+          </button>
           <Link
             href="/dashboard/materi"
             onClick={() => setMobileOpen(false)}
@@ -620,17 +700,25 @@ export function DashboardShell({
             <div className="hidden h-7 w-[1px] bg-[#e1e8f0] sm:block dark:bg-slate-700" />
 
             <div className="flex items-center gap-2.5">
-              <div className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full bg-[#10345b] text-[13px] font-bold text-white dark:bg-[#1557b0]">
-                {initials}
-              </div>
-              <div className="hidden text-left sm:block">
-                <p className="max-w-[160px] truncate text-[13px] font-semibold leading-tight text-[#142b45] dark:text-white">
-                  {effectiveUser.name}
-                </p>
-                <p className="max-w-[160px] truncate text-[11px] text-slate-500 dark:text-slate-400">
-                  {effectiveUser.opdShortName || "BPS Kab. Berau"}
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={openProfileModal}
+                title="Klik untuk mengedit profil & kata sandi Anda"
+                className="flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <div className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full bg-[#10345b] text-[13px] font-bold text-white dark:bg-[#1557b0]">
+                  {initials}
+                </div>
+                <div className="hidden text-left sm:block">
+                  <p className="max-w-[160px] truncate text-[13px] font-semibold leading-tight text-[#142b45] dark:text-white">
+                    {effectiveUser.name}
+                  </p>
+                  <p className="max-w-[160px] truncate text-[11px] text-[#087f80] dark:text-teal-400">
+                    Edit Profil ·{" "}
+                    {effectiveUser.opdShortName || "BPS Kab. Berau"}
+                  </p>
+                </div>
+              </button>
               <button
                 type="button"
                 onClick={handleLogout}
@@ -660,6 +748,150 @@ export function DashboardShell({
           <p>Evaluasi Penyelenggaraan Statistik Sektoral (EPSS) Terintegrasi</p>
         </footer>
       </div>
+
+      {/* Modal Edit Profil Pengguna (Tersedia untuk Semua Peran) */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
+          <div className="my-8 w-full max-w-lg rounded-[12px] border border-[#e1e8f0] bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] pb-4 dark:border-slate-800">
+              <div>
+                <Badge variant="teal">Pengaturan Akun</Badge>
+                <h3 className="mt-1 text-[18px] font-bold text-[#142b45] dark:text-white">
+                  Edit Profil & Kata Sandi Saya
+                </h3>
+                <p className="text-[12px] text-slate-500">
+                  {getRoleLabel(effectiveUser.role)} ·{" "}
+                  {effectiveUser.opdName || "BPS Kabupaten Berau"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {profileFeedback && (
+              <div
+                className={`mt-4 rounded-lg border p-3 text-[12px] font-medium ${
+                  profileFeedback.type === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-rose-200 bg-rose-50 text-rose-800"
+                }`}
+              >
+                {profileFeedback.text}
+              </div>
+            )}
+
+            <form
+              onSubmit={handleSaveProfile}
+              className="mt-4 space-y-3.5 text-[13px]"
+            >
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                    Nama Lengkap & Gelar
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={profName}
+                    onChange={(e) => setProfName(e.target.value)}
+                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                    NIP Pegawai
+                  </label>
+                  <input
+                    type="text"
+                    value={profNip}
+                    onChange={(e) => setProfNip(e.target.value)}
+                    placeholder="19900101..."
+                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                    Alamat Surel (Email)
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={profEmail}
+                    onChange={(e) => setProfEmail(e.target.value)}
+                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                    Nomor Telepon / WhatsApp
+                  </label>
+                  <input
+                    type="text"
+                    value={profPhone}
+                    onChange={(e) => setProfPhone(e.target.value)}
+                    placeholder="0812..."
+                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#142b45] dark:text-slate-200">
+                  Jabatan Fungsional / Struktural
+                </label>
+                <input
+                  type="text"
+                  value={profJabatan}
+                  onChange={(e) => setProfJabatan(e.target.value)}
+                  placeholder="Contoh: Pengelola Data Statistik Sektoral"
+                  className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
+                />
+              </div>
+
+              <div className="rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-3.5 dark:border-slate-800 dark:bg-slate-800/50">
+                <label className="block font-semibold text-[#142b45] dark:text-white">
+                  Ganti Kata Sandi{" "}
+                  <span className="font-normal text-slate-400">
+                    (Kosongkan jika tidak ingin mengganti)
+                  </span>
+                </label>
+                <input
+                  type="password"
+                  value={profNewPassword}
+                  onChange={(e) => setProfNewPassword(e.target.value)}
+                  placeholder="Masukkan kata sandi baru (minimal 6 karakter)..."
+                  className="mt-1.5 h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[13px] dark:border-slate-700 dark:bg-slate-900"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-[#e1e8f0] pt-3.5 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="h-[38px] rounded-[8px] border border-[#e1e8f0] px-4 text-[12px] font-semibold"
+                >
+                  Tutup
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="h-[38px] rounded-[8px] bg-[#10345b] px-5 text-[12px] font-semibold text-white hover:bg-[#142b45]"
+                >
+                  {savingProfile ? "Menyimpan..." : "Simpan Perubahan Profil"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

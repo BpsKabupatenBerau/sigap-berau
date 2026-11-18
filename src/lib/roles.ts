@@ -5,8 +5,10 @@ export interface ActiveSession {
     id: string;
     name: string;
     email: string;
+    nip: string | null;
     role: UserRole;
     jabatan: string | null;
+    phone: string | null;
     opdId: string | null;
     opdName: string | null;
     opdShortName: string | null;
@@ -15,8 +17,10 @@ export interface ActiveSession {
     id: string;
     name: string;
     email: string;
+    nip: string | null;
     role: UserRole;
     jabatan: string | null;
+    phone: string | null;
     opdId: string | null;
     opdName: string | null;
     opdShortName: string | null;
