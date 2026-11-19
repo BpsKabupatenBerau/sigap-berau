@@ -13,9 +13,9 @@ import {
   Send,
   X,
   ArrowLeft,
-  ShieldCheck,
   Award,
   Search,
+  BookOpen,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -24,8 +24,14 @@ import {
   OpdSimple,
   SerializedAssessment,
 } from "@/components/asesmen-client";
+import {
+  ARAH_PEMBINAAN_RECOMMENDATIONS,
+  getReadinessCategory,
+  READINESS_CATEGORIES,
+  SCALE_0_3_DEFINITIONS,
+} from "@/lib/asesmen-presets";
 
-const SCALE_LABELS: Record<number, { title: string; desc: string }> = {
+const SCALE_1_5_LABELS: Record<number, { title: string; desc: string }> = {
   1: { title: "Level 1 — Rintisan", desc: "Belum ada pedoman / baru inisiatif" },
   2: { title: "Level 2 — Terkelola", desc: "Ada draf / bukti pelaksanaan awal" },
   3: { title: "Level 3 — Terdefinisi", desc: "Sesuai SOP / Juknis & baku" },
@@ -44,22 +50,23 @@ export function PublicAsesmenClient({
 }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [showPedomanModal, setShowPedomanModal] = React.useState(false);
   const [fillingAssessment, setFillingAssessment] =
     React.useState<SerializedAssessment | null>(() => {
       if (initialSelectedId) {
-        return (
-          assessments.find((a) => a.id === initialSelectedId) || null
-        );
+        return assessments.find((a) => a.id === initialSelectedId) || null;
       }
       return null;
     });
 
-  // Identity fields for public (no-login) respondent
+  // Identity fields from Section B (IDENTITAS OPD) of Instrumen_Assessment_Kesiapan_OPD_Statistik_Sektoral_Berau.docx
   const [selectedOpdId, setSelectedOpdId] = React.useState<string>(
     opds[0]?.id || ""
   );
+  const [unitAddress, setUnitAddress] = React.useState("");
   const [respondentName, setRespondentName] = React.useState("");
   const [respondentNip, setRespondentNip] = React.useState("");
+  const [contactEmail, setContactEmail] = React.useState("");
 
   const [answerState, setAnswerState] = React.useState<
     Record<
@@ -98,9 +105,17 @@ export function PublicAsesmenClient({
         const prevAns = existingResp?.answers.find(
           (a) => a.questionId === q.id
         );
+        const defaultScale =
+          q.questionType === "SCALE_0_3"
+            ? 2
+            : q.questionType === "NUMBER"
+            ? 0
+            : q.questionType === "SCALE_1_5"
+            ? 3
+            : null;
+
         initialMap[q.id] = {
-          scaleValue:
-            prevAns?.scaleValue ?? (q.questionType === "SCALE_1_5" ? 3 : null),
+          scaleValue: prevAns?.scaleValue ?? defaultScale,
           yesNoValue:
             prevAns?.yesNoValue ?? (q.questionType === "YES_NO" ? "YA" : null),
           textAnswer: prevAns?.textAnswer || "",
@@ -136,12 +151,12 @@ export function PublicAsesmenClient({
     if (!fillingAssessment) return;
 
     if (!selectedOpdId) {
-      setFillError("Silakan pilih Instansi Perangkat Daerah (OPD) Anda.");
+      setFillError("Silakan pilih Nama OPD Anda.");
       return;
     }
 
     if (!respondentName.trim()) {
-      setFillError("Silakan isi Nama Lengkap Pengisi Asesmen.");
+      setFillError("Silakan isi Nama Responden dan Jabatan (Bagian B Identitas OPD).");
       return;
     }
 
@@ -160,6 +175,17 @@ export function PublicAsesmenClient({
         };
       });
 
+      const identityPrefix = [
+        unitAddress.trim() ? `Unit/Alamat: ${unitAddress.trim()}` : null,
+        contactEmail.trim() ? `Kontak: ${contactEmail.trim()}` : null,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      const combinedNotes = [identityPrefix, summaryNotes.trim()]
+        .filter(Boolean)
+        .join(" — ");
+
       const res = await fetch("/api/asesmen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,14 +196,14 @@ export function PublicAsesmenClient({
           submitMode: "DIKIRIM",
           respondentName: respondentName.trim(),
           respondentNip: respondentNip.trim(),
-          summaryNotes,
+          summaryNotes: combinedNotes,
           answers: answersPayload,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        setFillError(data.error || "Gagal mengirim jawaban asesmen.");
+        setFillError(data.error || "Gagal mengirim jawaban assessment.");
         setSubmitting(false);
         return;
       }
@@ -189,7 +215,7 @@ export function PublicAsesmenClient({
       });
       router.refresh();
     } catch {
-      setFillError("Terjadi gangguan jaringan saat mengirim asesmen.");
+      setFillError("Terjadi gangguan jaringan saat mengirim assessment.");
     } finally {
       setSubmitting(false);
     }
@@ -224,7 +250,7 @@ export function PublicAsesmenClient({
                   SIGAP <span className="text-[#087f80]">BERAU</span>
                 </span>
                 <Badge variant="teal" className="text-[10px]">
-                  Asesmen Umum (Tanpa Login)
+                  Assessment Umum (Tanpa Login)
                 </Badge>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -233,7 +259,15 @@ export function PublicAsesmenClient({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowPedomanModal(true)}
+              className="inline-flex h-[38px] items-center gap-1.5 rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] font-semibold text-[#087f80] hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-teal-300"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>Pedoman Skala 0–3</span>
+            </button>
             <ThemeToggle />
             <Link
               href="/login"
@@ -254,22 +288,24 @@ export function PublicAsesmenClient({
             <div className="max-w-2xl space-y-1.5">
               <div className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-[#90dfd7]">
                 <Globe className="h-3.5 w-3.5" />
-                <span>LAYANAN ASESMEN TERBUKA PERANGKAT DAERAH (TANPA LOGIN)</span>
+                <span>
+                  INSTRUMEN ASSESSMENT PEMAHAMAN DAN KESIAPAN OPD · TAHUN 2026
+                </span>
               </div>
               <h1 className="text-[22px] font-bold text-white sm:text-[26px]">
-                Asesmen Kesiapan Statistik Sektoral Kabupaten Berau
+                Assessment Kesiapan Penyelenggaraan Statistik Sektoral
               </h1>
               <p className="text-[13px] leading-relaxed text-[#acc5df]">
-                Pilih salah satu kartu paket asesmen di bawah ini, pilih
-                instansi Perangkat Daerah (OPD) Anda, dan kerjakan kuesioner
-                langsung di dalam pop-up tanpa perlu masuk (login) ke akun
-                aplikasi.
+                Instrumen ini disusun BPS Kabupaten Berau untuk memperoleh
+                gambaran tingkat pemahaman, kapasitas SDM, dan kesiapan OPD pada
+                7 Aspek Statistik Sektoral. Pilih kartu di bawah ini untuk
+                mengisi langsung tanpa login.
               </p>
             </div>
 
             <div className="rounded-[10px] border border-white/15 bg-white/10 px-4 py-3 text-center">
               <p className="text-[11px] font-semibold text-[#90dfd7]">
-                ASESMEN UMUM TERSEDIA
+                INSTRUMEN TERSEDIA
               </p>
               <p className="mt-0.5 text-[26px] font-extrabold text-white">
                 {assessments.length} Paket
@@ -286,12 +322,12 @@ export function PublicAsesmenClient({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari judul atau kategori asesmen umum..."
+              placeholder="Cari judul atau kategori instrumen assessment..."
               className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] pl-9 pr-3 text-[13px] focus:border-[#1557b0] focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800"
             />
           </div>
           <span className="text-[12px] text-slate-500">
-            Menampilkan <strong>{filtered.length}</strong> paket asesmen umum
+            Menampilkan <strong>{filtered.length}</strong> paket assessment umum
           </span>
         </div>
 
@@ -306,7 +342,10 @@ export function PublicAsesmenClient({
                 <div>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant="success" className="inline-flex items-center gap-1">
+                      <Badge
+                        variant="success"
+                        className="inline-flex items-center gap-1"
+                      >
                         <Globe className="h-3 w-3" />
                         <span>Umum (Tanpa Login)</span>
                       </Badge>
@@ -341,7 +380,7 @@ export function PublicAsesmenClient({
 
                 <div className="mt-4 flex items-center justify-between border-t border-[#e1e8f0] pt-3.5 dark:border-slate-800">
                   <span className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
-                    ✓ Terbuka untuk Perangkat Daerah
+                    ✓ Skala 0–3 & Kapasitas Aktual
                   </span>
                   <button
                     type="button"
@@ -349,7 +388,7 @@ export function PublicAsesmenClient({
                     className="inline-flex h-[38px] items-center gap-1.5 rounded-[8px] bg-[#10345b] px-4 text-[12px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
                   >
                     <ClipboardList className="h-3.5 w-3.5" />
-                    <span>Kerjakan Asesmen</span>
+                    <span>Kerjakan Assessment</span>
                   </button>
                 </div>
               </div>
@@ -357,19 +396,21 @@ export function PublicAsesmenClient({
           </div>
         ) : (
           <div className="rounded-[12px] border border-[#e1e8f0] bg-white p-10 text-center text-[13px] text-slate-500 dark:border-slate-800 dark:bg-slate-900">
-            Belum ada paket asesmen berstatus Umum yang dibuka saat ini.
+            Belum ada paket assessment berstatus Umum yang dibuka saat ini.
           </div>
         )}
       </main>
 
-      {/* POP-UP MODAL PENGERJAAN ASESMEN UMUM (TANPA LOGIN) */}
+      {/* POP-UP MODAL PENGERJAAN ASSESSMENT UMUM (TANPA LOGIN) */}
       {fillingAssessment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
           <div className="my-8 flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] bg-[#10345b] px-6 py-4 text-white">
               <div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="teal">Formulir Asesmen Umum</Badge>
+                  <Badge variant="teal">
+                    Instrumen Assessment Kesiapan OPD
+                  </Badge>
                   <span className="text-[11px] text-[#90dfd7]">
                     {fillingAssessment.questions.length} Pertanyaan
                   </span>
@@ -405,30 +446,39 @@ export function PublicAsesmenClient({
                       <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                       <span>{fillSuccess.message}</span>
                     </div>
-                    {fillSuccess.score && (
-                      <p className="mt-1.5 flex items-center gap-1.5 text-[13px] font-semibold text-[#087f80]">
-                        <Award className="h-4 w-4" />
-                        <span>
-                          Estimasi Skor Kesiapan OPD Anda: Level{" "}
-                          {fillSuccess.score.toFixed(2).replace(".", ",")} (
-                          {fillSuccess.pct}%)
-                        </span>
-                      </p>
+                    {fillSuccess.pct !== undefined && (
+                      <div className="mt-2 space-y-1 text-[13px]">
+                        <p className="flex items-center gap-1.5 font-bold text-[#087f80]">
+                          <Award className="h-4 w-4" />
+                          <span>
+                            Nilai Kesiapan OPD Anda: {fillSuccess.pct}% —
+                            Kategori:{" "}
+                            {getReadinessCategory(fillSuccess.pct).category}
+                          </span>
+                        </p>
+                        <p className="text-[12px] text-slate-700">
+                          <strong>Arahan Pembinaan BPS:</strong>{" "}
+                          {
+                            getReadinessCategory(fillSuccess.pct)
+                              .arahanPembinaan
+                          }
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
 
-                {/* Bagian Identitas Instansi OPD & Responden */}
+                {/* Bagian B: IDENTITAS OPD sesuai dokumen Instrumen_Assessment_Kesiapan_OPD_Statistik_Sektoral_Berau.docx */}
                 <div className="rounded-[10px] border border-[#d0e2ff] bg-[#ebf3ff]/50 p-4 space-y-3 dark:border-blue-900 dark:bg-blue-950/30">
                   <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wider text-[#10345b] dark:text-blue-300">
                     <Building2 className="h-4 w-4 text-[#087f80]" />
-                    <span>Identitas Instansi Perangkat Daerah & Pengisi</span>
+                    <span>B. Identitas OPD & Responden</span>
                   </p>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="sm:col-span-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
                       <label className="block text-[12px] font-semibold text-[#142b45] dark:text-slate-200">
-                        Pilih Organisasi Perangkat Daerah (OPD) *
+                        Nama OPD *
                       </label>
                       <select
                         required
@@ -451,9 +501,9 @@ export function PublicAsesmenClient({
                       </select>
                     </div>
 
-                    <div className="sm:col-span-2">
+                    <div>
                       <label className="block text-[12px] font-semibold text-[#142b45] dark:text-slate-200">
-                        Nama Lengkap Pengisi / Responden *
+                        Nama Responden *
                       </label>
                       <input
                         type="text"
@@ -467,7 +517,7 @@ export function PublicAsesmenClient({
 
                     <div>
                       <label className="block text-[12px] font-semibold text-[#142b45] dark:text-slate-200">
-                        NIP / Jabatan (Opsional)
+                        Jabatan / NIP
                       </label>
                       <input
                         type="text"
@@ -477,13 +527,39 @@ export function PublicAsesmenClient({
                         className="mt-1 h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 dark:border-slate-700 dark:bg-slate-900"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#142b45] dark:text-slate-200">
+                        Unit Kerja / Alamat
+                      </label>
+                      <input
+                        type="text"
+                        value={unitAddress}
+                        onChange={(e) => setUnitAddress(e.target.value)}
+                        placeholder="Subbagian Perencanaan / Tanjung Redeb"
+                        className="mt-1 h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 dark:border-slate-700 dark:bg-slate-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#142b45] dark:text-slate-200">
+                        Kontak / Email
+                      </label>
+                      <input
+                        type="text"
+                        value={contactEmail}
+                        onChange={(e) => setContactEmail(e.target.value)}
+                        placeholder="0812... / email@beraukab.go.id"
+                        className="mt-1 h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 dark:border-slate-700 dark:bg-slate-900"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Daftar Pertanyaan */}
                 {fillingAssessment.questions.map((q) => {
                   const currentAns = answerState[q.id] || {
-                    scaleValue: 3,
+                    scaleValue: q.questionType === "NUMBER" ? 0 : 2,
                     yesNoValue: "YA",
                     textAnswer: "",
                   };
@@ -494,19 +570,21 @@ export function PublicAsesmenClient({
                       className="rounded-[10px] border border-[#e1e8f0] bg-[#f8fafc] p-4 dark:border-slate-800 dark:bg-slate-800/50"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#10345b] text-[11px] font-bold text-white">
                             {q.order}
                           </span>
                           <Badge variant="secondary">{q.domainCode}</Badge>
                           {q.indicatorRef && (
-                            <span className="text-[11px] font-mono text-slate-500">
-                              Indikator {q.indicatorRef}
+                            <span className="text-[11px] font-mono font-semibold text-[#087f80] dark:text-teal-300">
+                              {q.indicatorRef}
                             </span>
                           )}
                         </div>
                         <span className="text-[11px] text-slate-400">
-                          Bobot: {q.weight}
+                          {q.questionType === "NUMBER"
+                            ? "Informasi Kapasitas (Non-Skor)"
+                            : "Skala Penilaian 0–3"}
                         </span>
                       </div>
 
@@ -517,6 +595,118 @@ export function PublicAsesmenClient({
                         <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
                           {q.helpText}
                         </p>
+                      )}
+
+                      {q.questionType === "SCALE_0_3" && (
+                        <div className="mt-3 space-y-2.5">
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                            {[0, 1, 2, 3].map((sc) => {
+                              const active = currentAns.scaleValue === sc;
+                              const def = SCALE_0_3_DEFINITIONS[sc];
+                              return (
+                                <button
+                                  key={sc}
+                                  type="button"
+                                  onClick={() =>
+                                    setAnswerState((prev) => ({
+                                      ...prev,
+                                      [q.id]: {
+                                        ...currentAns,
+                                        scaleValue: sc,
+                                      },
+                                    }))
+                                  }
+                                  className={`flex flex-col items-start rounded-[8px] border p-2.5 text-left transition ${
+                                    active
+                                      ? "border-[#087f80] bg-[#087f80] text-white"
+                                      : "border-[#e1e8f0] bg-white text-[#142b45] hover:border-[#087f80] dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                                  }`}
+                                >
+                                  <span className="text-[12px] font-bold">
+                                    {def.title}
+                                  </span>
+                                  <span
+                                    className={`mt-0.5 text-[10px] leading-snug ${
+                                      active
+                                        ? "text-[#90dfd7]"
+                                        : "text-slate-500"
+                                    }`}
+                                  >
+                                    {def.desc}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <input
+                            type="text"
+                            value={currentAns.textAnswer}
+                            onChange={(e) =>
+                              setAnswerState((prev) => ({
+                                ...prev,
+                                [q.id]: {
+                                  ...currentAns,
+                                  textAnswer: e.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="Bukti dukung / catatan (cantumkan nomor SK, SOP, dokumen perencanaan, metadata, atau tautan)..."
+                            className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
+                          />
+                        </div>
+                      )}
+
+                      {q.questionType === "NUMBER" && (
+                        <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                              Jumlah Aktual (Angka):
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={
+                                currentAns.scaleValue !== null &&
+                                currentAns.scaleValue !== undefined
+                                  ? currentAns.scaleValue
+                                  : 0
+                              }
+                              onChange={(e) =>
+                                setAnswerState((prev) => ({
+                                  ...prev,
+                                  [q.id]: {
+                                    ...currentAns,
+                                    scaleValue: Math.max(
+                                      0,
+                                      Number(e.target.value || 0)
+                                    ),
+                                  },
+                                }))
+                              }
+                              className="mt-1 h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 font-bold text-[#10345b] dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                              Keterangan / Rincian (Opsional):
+                            </label>
+                            <input
+                              type="text"
+                              value={currentAns.textAnswer}
+                              onChange={(e) =>
+                                setAnswerState((prev) => ({
+                                  ...prev,
+                                  [q.id]: {
+                                    ...currentAns,
+                                    textAnswer: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="Sebutkan rincian unit/pegawai atau nama kegiatan..."
+                              className="mt-1 h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
+                            />
+                          </div>
+                        </div>
                       )}
 
                       {q.questionType === "SCALE_1_5" && (
@@ -544,90 +734,60 @@ export function PublicAsesmenClient({
                                   }`}
                                 >
                                   <span className="text-[12px] font-bold">
-                                    {SCALE_LABELS[lvl].title}
+                                    {SCALE_1_5_LABELS[lvl].title}
                                   </span>
                                   <span
                                     className={`mt-0.5 text-[10px] leading-snug ${
-                                      active ? "text-[#90dfd7]" : "text-slate-500"
+                                      active
+                                        ? "text-[#90dfd7]"
+                                        : "text-slate-500"
                                     }`}
                                   >
-                                    {SCALE_LABELS[lvl].desc}
+                                    {SCALE_1_5_LABELS[lvl].desc}
                                   </span>
                                 </button>
                               );
                             })}
                           </div>
-                          <input
-                            type="text"
-                            value={currentAns.textAnswer}
-                            onChange={(e) =>
-                              setAnswerState((prev) => ({
-                                ...prev,
-                                [q.id]: {
-                                  ...currentAns,
-                                  textAnswer: e.target.value,
-                                },
-                              }))
-                            }
-                            placeholder="Tambahkan keterangan bukti / kondisi saat ini di OPD (opsional)..."
-                            className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                          />
                         </div>
                       )}
 
                       {q.questionType === "YES_NO" && (
-                        <div className="mt-3 space-y-2.5">
-                          <div className="flex flex-wrap gap-3">
-                            {[
-                              {
-                                val: "YA",
-                                label: "✓ YA — Sudah Dilaksanakan / Tersedia",
-                              },
-                              {
-                                val: "TIDAK",
-                                label: "✗ TIDAK — Belum Tersedia / Masih Draf",
-                              },
-                            ].map((opt) => {
-                              const active = currentAns.yesNoValue === opt.val;
-                              return (
-                                <button
-                                  key={opt.val}
-                                  type="button"
-                                  onClick={() =>
-                                    setAnswerState((prev) => ({
-                                      ...prev,
-                                      [q.id]: {
-                                        ...currentAns,
-                                        yesNoValue: opt.val,
-                                      },
-                                    }))
-                                  }
-                                  className={`rounded-[8px] border px-4 py-2 text-[12px] font-semibold transition ${
-                                    active
-                                      ? "border-[#10345b] bg-[#10345b] text-white dark:border-blue-500 dark:bg-blue-600"
-                                      : "border-[#e1e8f0] bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                                  }`}
-                                >
-                                  {opt.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <input
-                            type="text"
-                            value={currentAns.textAnswer}
-                            onChange={(e) =>
-                              setAnswerState((prev) => ({
-                                ...prev,
-                                [q.id]: {
-                                  ...currentAns,
-                                  textAnswer: e.target.value,
-                                },
-                              }))
-                            }
-                            placeholder="Sebutkan nomor dokumen / keterangan pendukung (opsional)..."
-                            className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                          />
+                        <div className="mt-3 flex flex-wrap gap-3">
+                          {[
+                            {
+                              val: "YA",
+                              label: "✓ YA — Sudah Dilaksanakan",
+                            },
+                            {
+                              val: "TIDAK",
+                              label: "✗ TIDAK — Belum Tersedia",
+                            },
+                          ].map((opt) => {
+                            const active = currentAns.yesNoValue === opt.val;
+                            return (
+                              <button
+                                key={opt.val}
+                                type="button"
+                                onClick={() =>
+                                  setAnswerState((prev) => ({
+                                    ...prev,
+                                    [q.id]: {
+                                      ...currentAns,
+                                      yesNoValue: opt.val,
+                                    },
+                                  }))
+                                }
+                                className={`rounded-[8px] border px-4 py-2 text-[12px] font-semibold transition ${
+                                  active
+                                    ? "border-[#10345b] bg-[#10345b] text-white"
+                                    : "border-[#e1e8f0] bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
 
@@ -645,7 +805,7 @@ export function PublicAsesmenClient({
                                 },
                               }))
                             }
-                            placeholder="Tuliskan uraian jawaban atau kendala teknis di instansi Anda..."
+                            placeholder="Tuliskan uraian jawaban..."
                             className="w-full rounded-[8px] border border-[#e1e8f0] bg-white p-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
                           />
                         </div>
@@ -662,7 +822,7 @@ export function PublicAsesmenClient({
                     rows={2}
                     value={summaryNotes}
                     onChange={(e) => setSummaryNotes(e.target.value)}
-                    placeholder="Tuliskan kesimpulan umum atau permintaan topik klinik pembinaan kepada BPS Kabupaten Berau..."
+                    placeholder="Tuliskan kesimpulan umum atau permintaan topik bimbingan teknis kepada BPS Kabupaten Berau..."
                     className="mt-1.5 w-full rounded-[8px] border border-[#e1e8f0] p-3 text-[12px] dark:border-slate-700 dark:bg-slate-800"
                   />
                 </div>
@@ -686,11 +846,144 @@ export function PublicAsesmenClient({
                   <span>
                     {submitting
                       ? "Mengirim Jawaban..."
-                      : "Kirim Jawaban Asesmen"}
+                      : "Kirim Jawaban Assessment"}
                   </span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pedoman Skala Penilaian (0-3), Kategori Kesiapan & Arah Pembinaan */}
+      {showPedomanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
+          <div className="my-8 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] bg-[#10345b] px-6 py-4 text-white">
+              <div>
+                <Badge variant="teal">
+                  Pedoman Resmi Assessment BPS Kabupaten Berau Tahun 2026
+                </Badge>
+                <h3 className="mt-1 text-[18px] font-bold text-white">
+                  Skala Penilaian (0–3), Kategori Kesiapan & Arah Pembinaan OPD
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPedomanModal(false)}
+                className="rounded-lg p-1.5 text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-[13px]">
+              <div>
+                <h4 className="font-bold text-[#142b45] dark:text-white">
+                  E. Skala Penilaian Tingkat Penerapan (0–3)
+                </h4>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {[0, 1, 2, 3].map((sc) => {
+                    const def = SCALE_0_3_DEFINITIONS[sc];
+                    return (
+                      <div
+                        key={sc}
+                        className="rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-3 dark:border-slate-800 dark:bg-slate-800/50"
+                      >
+                        <p className="font-bold text-[#10345b] dark:text-blue-300">
+                          {def.title}
+                        </p>
+                        <p className="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
+                          {def.desc}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-[#142b45] dark:text-white">
+                  F. Penghitungan Nilai & Kategori Kesiapan OPD
+                </h4>
+                <p className="mt-1 text-[12px] text-slate-600 dark:text-slate-400">
+                  Rumus:{" "}
+                  <strong>
+                    Nilai Kesiapan = (Total Skor Diperoleh ÷ Total Skor Maksimal)
+                    × 100
+                  </strong>
+                  .
+                </p>
+                <div className="mt-2.5 overflow-x-auto rounded-lg border border-[#e1e8f0] dark:border-slate-800">
+                  <table className="w-full text-left text-[12px]">
+                    <thead>
+                      <tr className="border-b border-[#e1e8f0] bg-[#f8fafc] font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
+                        <th className="px-3 py-2">Rentang Nilai</th>
+                        <th className="px-3 py-2">Kategori</th>
+                        <th className="px-3 py-2">Arahan Pembinaan BPS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
+                      {READINESS_CATEGORIES.map((cat) => (
+                        <tr key={cat.category}>
+                          <td className="px-3 py-2 font-bold">
+                            {cat.minPct}–{cat.maxPct}
+                          </td>
+                          <td className="px-3 py-2">
+                            <Badge variant={cat.badgeVariant}>
+                              {cat.category}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                            {cat.arahanPembinaan}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-[#142b45] dark:text-white">
+                  G. Arah Pembinaan Berdasarkan Temuan Assessment
+                </h4>
+                <div className="mt-2 overflow-x-auto rounded-lg border border-[#e1e8f0] dark:border-slate-800">
+                  <table className="w-full text-left text-[12px]">
+                    <thead>
+                      <tr className="border-b border-[#e1e8f0] bg-[#f8fafc] font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
+                        <th className="px-3 py-2">Temuan Assessment</th>
+                        <th className="px-3 py-2">
+                          Bentuk Pembinaan yang Disarankan
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
+                      {ARAH_PEMBINAAN_RECOMMENDATIONS.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2 font-semibold text-[#142b45] dark:text-white">
+                            {item.temuan}
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                            {item.rekomendasi}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-[#e1e8f0] bg-[#f8fafc] px-6 py-3.5 dark:border-slate-800 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => setShowPedomanModal(false)}
+                className="h-[38px] rounded-[8px] bg-[#10345b] px-5 text-[12px] font-semibold text-white hover:bg-[#142b45]"
+              >
+                Tutup Pedoman
+              </button>
+            </div>
           </div>
         </div>
       )}

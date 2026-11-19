@@ -97,7 +97,12 @@ export default async function AsesmenPage() {
           indicatorRef: q.indicatorRef,
           questionText: q.questionText,
           helpText: q.helpText,
-          questionType: q.questionType as "SCALE_1_5" | "YES_NO" | "TEXT",
+          questionType: q.questionType as
+            | "SCALE_0_3"
+            | "NUMBER"
+            | "SCALE_1_5"
+            | "YES_NO"
+            | "TEXT",
           weight: q.weight,
         })),
         responses: a.responses.map((r) => {

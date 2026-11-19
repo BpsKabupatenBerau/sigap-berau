@@ -7,9 +7,7 @@ import {
   Plus,
   CheckCircle2,
   Clock,
-  Building2,
   Sparkles,
-  FileCheck2,
   MessageSquare,
   Download,
   Lock,
@@ -20,10 +18,10 @@ import {
   X,
   AlertCircle,
   Award,
-  ChevronRight,
   Search,
   Globe,
   Link2,
+  BookOpen,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -31,7 +29,13 @@ import { UserRole } from "@/lib/roles";
 import { formatDateId } from "@/lib/utils";
 import {
   ASSESSMENT_PRESET_TEMPLATES,
+  AssessmentQuestionType,
+  ARAH_PEMBINAAN_RECOMMENDATIONS,
+  getReadinessCategory,
+  OFFICIAL_30_INSTRUMEN_QUESTIONS,
   PresetQuestionItem,
+  READINESS_CATEGORIES,
+  SCALE_0_3_DEFINITIONS,
 } from "@/lib/asesmen-presets";
 
 export interface SerializedAssessmentQuestion {
@@ -41,7 +45,7 @@ export interface SerializedAssessmentQuestion {
   indicatorRef: string | null;
   questionText: string;
   helpText: string | null;
-  questionType: "SCALE_1_5" | "YES_NO" | "TEXT";
+  questionType: AssessmentQuestionType;
   weight: number;
 }
 
@@ -96,13 +100,23 @@ export interface OpdSimple {
   shortName: string;
 }
 
-const SCALE_LABELS: Record<number, { title: string; desc: string }> = {
+const SCALE_1_5_LABELS: Record<number, { title: string; desc: string }> = {
   1: { title: "Level 1 — Rintisan", desc: "Belum ada pedoman / baru inisiatif" },
   2: { title: "Level 2 — Terkelola", desc: "Ada draf / bukti pelaksanaan awal" },
   3: { title: "Level 3 — Terdefinisi", desc: "Sesuai SOP / Juknis & baku" },
   4: { title: "Level 4 — Terpadu", desc: "Terintegrasi & direviu berkala" },
   5: { title: "Level 5 — Optimum", desc: "Pemutakhiran berkelanjutan" },
 };
+
+const SEVEN_ASPECT_OPTIONS = [
+  "I. Kelembagaan dan Tata Kelola",
+  "II. SDM dan Kompetensi",
+  "III. Perencanaan & Pelaksanaan",
+  "IV. Standar Data & Metadata",
+  "V. Kualitas & Pengolahan Data",
+  "VI. Integrasi, Koordinasi & Pemanfaatan",
+  "VII. Diseminasi & Publikasi",
+];
 
 export function AsesmenClient({
   effectiveRole,
@@ -119,9 +133,8 @@ export function AsesmenClient({
   const canManage =
     effectiveRole === "PEMBINA_SEKTORAL" || effectiveRole === "SUPERADMIN";
 
-  const [selectedAssessmentId, setSelectedAssessmentId] =
-    React.useState<string>(assessments[0]?.id || "");
   const [showCreateModal, setShowCreateModal] = React.useState(false);
+  const [showPedomanModal, setShowPedomanModal] = React.useState(false);
 
   // Filter state
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -180,18 +193,15 @@ export function AsesmenClient({
   const [creatingAssessment, setCreatingAssessment] = React.useState(false);
   const [createError, setCreateError] = React.useState<string | null>(null);
 
-  const activeAssessment =
-    assessments.find((a) => a.id === selectedAssessmentId) ||
-    assessments[0] ||
-    null;
-
   function applyPresetTemplate(presetId: string) {
     const found = ASSESSMENT_PRESET_TEMPLATES.find((p) => p.id === presetId);
     if (!found) return;
     setNewTitle(found.name);
     setNewCategory(found.category);
     setNewDescription(found.description);
-    setBuilderQuestions(found.questions.map((q, idx) => ({ ...q, order: idx + 1 })));
+    setBuilderQuestions(
+      found.questions.map((q, idx) => ({ ...q, order: idx + 1 }))
+    );
   }
 
   function addCustomQuestion() {
@@ -199,11 +209,11 @@ export function AsesmenClient({
       ...prev,
       {
         order: prev.length + 1,
-        domainCode: "Domain 1",
-        indicatorRef: "10101",
+        domainCode: SEVEN_ASPECT_OPTIONS[0],
+        indicatorRef: `Aspek I.${prev.length + 1}`,
         questionText: "",
         helpText: "",
-        questionType: "SCALE_1_5",
+        questionType: "SCALE_0_3",
         weight: 1.0,
       },
     ]);
@@ -236,9 +246,17 @@ export function AsesmenClient({
 
     for (const q of assessment.questions) {
       const prevAns = existingResp?.answers.find((a) => a.questionId === q.id);
+      const defaultScale =
+        q.questionType === "SCALE_0_3"
+          ? 2
+          : q.questionType === "NUMBER"
+          ? 0
+          : q.questionType === "SCALE_1_5"
+          ? 3
+          : null;
+
       initialMap[q.id] = {
-        scaleValue:
-          prevAns?.scaleValue ?? (q.questionType === "SCALE_1_5" ? 3 : null),
+        scaleValue: prevAns?.scaleValue ?? defaultScale,
         yesNoValue:
           prevAns?.yesNoValue ?? (q.questionType === "YES_NO" ? "YA" : null),
         textAnswer: prevAns?.textAnswer || "",
@@ -257,12 +275,13 @@ export function AsesmenClient({
     assessment: SerializedAssessment,
     response: SerializedAssessmentResponse
   ) {
+    const catInfo = getReadinessCategory(response.readinessPct);
     setReviewingData({ assessment, response });
     setPembinaFeedbackInput(
       response.pembinaFeedback ||
-        `Berdasarkan hasil asesmen ${response.opdShortName} (Skor Kesiapan: ${
-          response.readinessScore?.toFixed(2).replace(".", ",") || "-"
-        }), tim Pembina BPS merekomendasikan percepatan kelengkapan dokumen bukti Level 3–4 dan pemutakhiran metadata pada aplikasi INDAH BPS.`
+        `Kategori Kesiapan ${response.opdShortName}: ${catInfo.category.toUpperCase()} (${
+          response.readinessPct ?? 0
+        }%). Arahan Pembinaan BPS: ${catInfo.arahanPembinaan}`
     );
     setReviewNotice(null);
   }
@@ -304,9 +323,6 @@ export function AsesmenClient({
       }
 
       setShowCreateModal(false);
-      if (data.assessmentId) {
-        setSelectedAssessmentId(data.assessmentId);
-      }
       router.refresh();
     } catch {
       setCreateError("Terjadi gangguan jaringan saat menyimpan asesmen.");
@@ -431,7 +447,7 @@ export function AsesmenClient({
 
   function handleExportCsv(assessment: SerializedAssessment) {
     const header =
-      "Nama Asesmen,Instansi OPD,Status Pengisian,Skor Kesiapan (1-5),Persentase Kesiapan (%),Catatan OPD,Rekomendasi Pembina BPS\n";
+      "Nama Asesmen,Instansi OPD,Status Pengisian,Nilai Kesiapan (%),Kategori Kesiapan,Catatan OPD,Arahan & Rekomendasi Pembina BPS\n";
     const targetedOpds = assessment.targetOpdId
       ? opds.filter((o) => o.id === assessment.targetOpdId)
       : opds;
@@ -439,13 +455,12 @@ export function AsesmenClient({
     const rows = targetedOpds
       .map((o) => {
         const r = assessment.responses.find((resp) => resp.opdId === o.id);
+        const cat = r?.readinessPct !== null && r?.readinessPct !== undefined
+          ? getReadinessCategory(r.readinessPct).category
+          : "-";
         return `"${assessment.title.replace(/"/g, '""')}","${o.name}","${
           r?.status || "BELUM_MENGISI"
-        }","${
-          r?.readinessScore
-            ? r.readinessScore.toFixed(2).replace(".", ",")
-            : "-"
-        }","${r?.readinessPct ? `${r.readinessPct}%` : "-"}","${(
+        }","${r?.readinessPct !== null && r?.readinessPct !== undefined ? `${r.readinessPct}%` : "-"}","${cat}","${(
           r?.summaryNotes || ""
         ).replace(/"/g, '""')}","${(r?.pembinaFeedback || "").replace(
           /"/g,
@@ -460,7 +475,7 @@ export function AsesmenClient({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Hasil_Asesmen_SIGAP_Berau_${assessment.periodYear}.csv`;
+    a.download = `Hasil_Assessment_Kesiapan_OPD_Berau_${assessment.periodYear}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -478,10 +493,7 @@ export function AsesmenClient({
     }
   }
 
-  // Filter daftar paket asesmen berdasarkan pencarian, kategori, dan status
-  const categories = Array.from(
-    new Set(assessments.map((a) => a.category))
-  );
+  const categories = Array.from(new Set(assessments.map((a) => a.category)));
 
   const filteredAssessments = assessments.filter((item) => {
     const matchQuery =
@@ -513,7 +525,6 @@ export function AsesmenClient({
     return true;
   });
 
-  // Sinkronkan managingAssessment bila data ter-refresh dari server
   const currentManagedAssessment = managingAssessment
     ? assessments.find((a) => a.id === managingAssessment.id) ||
       managingAssessment
@@ -525,33 +536,43 @@ export function AsesmenClient({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-3xl">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#087f80] dark:text-teal-400">
-            {effectiveRole === "OPERATOR_OPD"
-              ? `ASESMEN KESIAPAN STATISTIK SEKTORAL — ${
-                  userOpd?.shortName || "OPD"
-                }`
-              : "MANAJEMEN ASESMEN & PEMETAAN KESIAPAN OPD — PEMBINA BPS"}
+            INSTRUMEN ASSESSMENT PEMAHAMAN & KESIAPAN OPD · BPS KABUPATEN BERAU
           </p>
           <h1 className="mt-1 text-[24px] font-bold tracking-tight text-[#142b45] dark:text-white">
             {effectiveRole === "OPERATOR_OPD"
-              ? `Asesmen Kesiapan — ${userOpd?.shortName || "Perangkat Daerah"}`
-              : "Asesmen Diagnostik & Pemetaan Kesiapan OPD"}
+              ? `Assessment Kesiapan Statistik Sektoral — ${
+                  userOpd?.shortName || "OPD"
+                }`
+              : "Assessment Pemahaman & Kesiapan OPD (7 Aspek)"}
           </h1>
           <p className="mt-1 text-[13px] text-slate-600 dark:text-slate-400">
-            Pilih kartu asesmen di bawah ini untuk mengerjakan kuesioner atau
-            memeriksa hasil melalui jendela pop-up.
+            Pemetaan pemahaman, kapasitas SDM, dan kesiapan Perangkat Daerah
+            pada 7 Aspek Penyelenggaraan Statistik Sektoral (Skala 0–3 &
+            Kapasitas Aktual).
           </p>
         </div>
 
-        {canManage && (
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex h-[40px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
+            onClick={() => setShowPedomanModal(true)}
+            className="inline-flex h-[40px] items-center gap-2 rounded-[8px] border border-[#e1e8f0] bg-white px-3.5 text-[12px] font-semibold text-[#10345b] hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-blue-300"
           >
-            <Plus className="h-4 w-4" />
-            <span>Buat Paket Asesmen Baru</span>
+            <BookOpen className="h-4 w-4 text-[#087f80]" />
+            <span>Pedoman Skala 0–3 & Kategori Kesiapan</span>
           </button>
-        )}
+
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex h-[40px] items-center gap-2 rounded-[8px] bg-[#10345b] px-4 text-[13px] font-semibold text-white hover:bg-[#142b45] dark:bg-[#1557b0]"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Buat Paket Assessment</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Bilah Pencarian & Filter */}
@@ -562,7 +583,7 @@ export function AsesmenClient({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari judul atau topik paket asesmen..."
+            placeholder="Cari judul atau kategori instrumen assessment..."
             className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-[#f8fafc] pl-9 pr-3 text-[13px] focus:border-[#1557b0] focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800"
           />
         </div>
@@ -599,13 +620,18 @@ export function AsesmenClient({
         </div>
       </div>
 
-      {/* Daftar Kartu Paket Asesmen */}
+      {/* Daftar Kartu Paket Assessment */}
       {filteredAssessments.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {filteredAssessments.map((item) => {
             const myResponse = userOpd
               ? item.responses.find((r) => r.opdId === userOpd.id)
               : null;
+            const myCatInfo =
+              myResponse?.readinessPct !== null &&
+              myResponse?.readinessPct !== undefined
+                ? getReadinessCategory(myResponse.readinessPct)
+                : null;
             const targetedCount = item.targetOpdId ? 1 : opds.length;
             const submittedCount = item.responses.filter(
               (r) => r.status === "DIKIRIM" || r.status === "DIREVIU"
@@ -672,28 +698,24 @@ export function AsesmenClient({
                         {item.targetOpdShortName || "Seluruh OPD"}
                       </strong>
                     </span>
-                    {effectiveRole === "OPERATOR_OPD" &&
-                      myResponse?.readinessScore && (
-                        <>
-                          <span>·</span>
-                          <span className="inline-flex items-center gap-1 font-bold text-[#087f80] dark:text-teal-400">
-                            <Award className="h-3.5 w-3.5" />
-                            Skor Anda:{" "}
-                            {myResponse.readinessScore
-                              .toFixed(2)
-                              .replace(".", ",")}{" "}
-                            ({myResponse.readinessPct}%)
-                          </span>
-                        </>
-                      )}
+                    {effectiveRole === "OPERATOR_OPD" && myCatInfo && (
+                      <>
+                        <span>·</span>
+                        <span className="inline-flex items-center gap-1 font-bold text-[#087f80] dark:text-teal-400">
+                          <Award className="h-3.5 w-3.5" />
+                          Nilai: {myResponse?.readinessPct}% (
+                          {myCatInfo.category})
+                        </span>
+                      </>
+                    )}
                   </div>
 
-                  {/* Cuplikan Umpan Balik Pembina jika sudah direviu (Operator OPD) */}
+                  {/* Cuplikan Umpan Balik Pembina jika sudah direviu */}
                   {effectiveRole === "OPERATOR_OPD" &&
                     myResponse?.pembinaFeedback && (
                       <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50/70 px-3 py-2 text-[12px] text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
                         <p className="line-clamp-2">
-                          <strong>Catatan Pembina BPS:</strong>{" "}
+                          <strong>Arahan Pembina BPS:</strong>{" "}
                           {myResponse.pembinaFeedback}
                         </p>
                       </div>
@@ -723,16 +745,14 @@ export function AsesmenClient({
                   )}
                 </div>
 
-                {/* Footer Kartu: Status & Tombol Pop-up */}
+                {/* Footer Kartu */}
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#e1e8f0] pt-3.5 dark:border-slate-800">
                   {effectiveRole === "OPERATOR_OPD" && userOpd ? (
                     <>
                       <div>{renderResponseBadge(myResponse?.status)}</div>
                       <button
                         type="button"
-                        disabled={
-                          item.status !== "AKTIF" && !myResponse
-                        }
+                        disabled={item.status !== "AKTIF" && !myResponse}
                         onClick={() => openFillModal(item, userOpd)}
                         className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#10345b] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#142b45] disabled:opacity-50 dark:bg-[#1557b0]"
                       >
@@ -742,8 +762,8 @@ export function AsesmenClient({
                           myResponse?.status === "DIREVIU"
                             ? "Lihat / Perbarui di Pop-up"
                             : myResponse?.status === "DRAF"
-                            ? "Lanjutkan Asesmen"
-                            : "Kerjakan Asesmen"}
+                            ? "Lanjutkan Assessment"
+                            : "Kerjakan Assessment"}
                         </span>
                       </button>
                     </>
@@ -754,11 +774,6 @@ export function AsesmenClient({
                           type="button"
                           onClick={() => handleToggleStatus(item)}
                           className="inline-flex h-[34px] items-center gap-1 rounded-[7px] border border-[#e1e8f0] bg-[#f8fafc] px-2.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                          title={
-                            item.status === "AKTIF"
-                              ? "Tutup Pengisian"
-                              : "Buka Kembali"
-                          }
                         >
                           {item.status === "AKTIF" ? (
                             <>
@@ -777,7 +792,6 @@ export function AsesmenClient({
                           type="button"
                           onClick={() => handleTogglePublic(item)}
                           className="inline-flex h-[34px] items-center gap-1 rounded-[7px] border border-[#e1e8f0] bg-[#f8fafc] px-2.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                          title="Ubah Akses Umum (Tanpa Login) / Wajib Login"
                         >
                           <Globe className="h-3 w-3 text-[#087f80]" />
                           <span>
@@ -792,7 +806,6 @@ export function AsesmenClient({
                             type="button"
                             onClick={() => handleCopyPublicLink(item.id)}
                             className="inline-flex h-[34px] items-center gap-1 rounded-[7px] border border-teal-200 bg-teal-50/70 px-2.5 text-[11px] font-semibold text-[#087f80] hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300"
-                            title="Salin Tautan Asesmen Umum (Tanpa Login)"
                           >
                             <Link2 className="h-3 w-3" />
                             <span>
@@ -807,7 +820,6 @@ export function AsesmenClient({
                           type="button"
                           onClick={() => handleExportCsv(item)}
                           className="inline-flex h-[34px] items-center gap-1 rounded-[7px] border border-[#e1e8f0] bg-[#f8fafc] px-2.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                          title="Unduh Rekap CSV"
                         >
                           <Download className="h-3 w-3 text-[#1557b0]" />
                           <span>CSV</span>
@@ -831,7 +843,8 @@ export function AsesmenClient({
         </div>
       ) : (
         <div className="rounded-[12px] border border-[#e1e8f0] bg-white p-10 text-center text-[13px] text-slate-500 dark:border-slate-800 dark:bg-slate-900">
-          Tidak ada kartu paket asesmen yang sesuai dengan filter pencarian Anda.
+          Tidak ada kartu paket assessment yang sesuai dengan filter pencarian
+          Anda.
         </div>
       )}
 
@@ -870,8 +883,8 @@ export function AsesmenClient({
                     <tr className="border-b border-[#e1e8f0] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
                       <th className="px-4 py-3">Perangkat Daerah (OPD)</th>
                       <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3">Skor Kesiapan</th>
-                      <th className="px-3 py-3">Catatan & Rekomendasi</th>
+                      <th className="px-3 py-3">Nilai & Kategori Kesiapan</th>
+                      <th className="px-3 py-3">Catatan & Arahan Pembinaan</th>
                       <th className="px-4 py-3 text-right">Aksi</th>
                     </tr>
                   </thead>
@@ -885,6 +898,12 @@ export function AsesmenClient({
                       const resp = currentManagedAssessment.responses.find(
                         (r) => r.opdId === opd.id
                       );
+                      const catInfo =
+                        resp?.readinessPct !== null &&
+                        resp?.readinessPct !== undefined
+                          ? getReadinessCategory(resp.readinessPct)
+                          : null;
+
                       return (
                         <tr
                           key={opd.id}
@@ -902,14 +921,19 @@ export function AsesmenClient({
                             {renderResponseBadge(resp?.status)}
                           </td>
                           <td className="px-3 py-3">
-                            {resp?.readinessScore ? (
-                              <span className="font-bold text-[#087f80] dark:text-teal-400">
-                                Lvl{" "}
-                                {resp.readinessScore
-                                  .toFixed(2)
-                                  .replace(".", ",")}{" "}
-                                ({resp.readinessPct}%)
-                              </span>
+                            {catInfo ? (
+                              <div className="flex flex-col items-start gap-1">
+                                <span className="font-bold text-[#142b45] dark:text-white">
+                                  {resp?.readinessPct}% (Rata-rata{" "}
+                                  {resp?.readinessScore
+                                    ?.toFixed(2)
+                                    .replace(".", ",")}
+                                  /3,00)
+                                </span>
+                                <Badge variant={catInfo.badgeVariant}>
+                                  {catInfo.category}
+                                </Badge>
+                              </div>
                             ) : (
                               <span className="text-[12px] text-slate-400">
                                 -
@@ -982,15 +1006,14 @@ export function AsesmenClient({
         </div>
       )}
 
-      {/* MODAL 1: Fill Assessment Questionnaire (Operator OPD / Superadmin) */}
+      {/* MODAL 1: Fill Assessment Questionnaire (Skala 0-3 & Jumlah Aktual sesuai Instrumen BPS Berau) */}
       {fillingAssessment && fillingOpd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
           <div className="my-8 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            {/* Modal Header */}
             <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] bg-[#10345b] px-6 py-4 text-white">
               <div>
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[#90dfd7]">
-                  FORMULIR PENGISIAN ASESMEN OPD · {fillingOpd.shortName}
+                  INSTRUMEN ASSESSMENT KESIAPAN OPD · {fillingOpd.shortName}
                 </span>
                 <h3 className="mt-0.5 text-[18px] font-bold text-white">
                   {fillingAssessment.title}
@@ -1005,7 +1028,6 @@ export function AsesmenClient({
               </button>
             </div>
 
-            {/* Modal Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5 text-[13px]">
               {fillError && (
                 <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-800">
@@ -1021,6 +1043,32 @@ export function AsesmenClient({
                 </div>
               )}
 
+              {/* Ringkasan Petunjuk Pengisian (Bagian C & E Instrumen) */}
+              <div className="rounded-[10px] border border-[#d0e2ff] bg-[#ebf3ff]/60 p-3.5 text-[12px] text-[#142b45] dark:border-blue-900 dark:bg-blue-950/30 dark:text-slate-200">
+                <p className="font-bold text-[#10345b] dark:text-blue-300">
+                  Petunjuk Pengisian Instrumen Assessment (BPS Kabupaten Berau):
+                </p>
+                <ul className="mt-1 list-disc pl-4 space-y-0.5 text-slate-700 dark:text-slate-300">
+                  <li>
+                    <strong>Pertanyaan Tingkat Penerapan (Skala 0–3):</strong>{" "}
+                    Pilih <strong>0</strong> (Belum mengetahui/tersedia),{" "}
+                    <strong>1</strong> (Mengetahui, belum melaksanakan),{" "}
+                    <strong>2</strong> (Melaksanakan sebagian), atau{" "}
+                    <strong>3</strong> (Konsisten & terdokumentasi).
+                  </li>
+                  <li>
+                    <strong>Pertanyaan Jumlah (Kapasitas SDM/Kegiatan):</strong>{" "}
+                    Isikan angka aktual (tuliskan 0 jika tidak ada). Digunakan
+                    sebagai informasi kapasitas dan tidak dikonversi langsung
+                    menjadi skor.
+                  </li>
+                  <li>
+                    Sertakan nama dokumen bukti dukung (SK, SOP, KAK, metadata,
+                    atau tautan publikasi) pada kolom catatan di tiap butir.
+                  </li>
+                </ul>
+              </div>
+
               {(() => {
                 const existingResp = fillingAssessment.responses.find(
                   (r) => r.opdId === fillingOpd.id
@@ -1029,7 +1077,7 @@ export function AsesmenClient({
                 return (
                   <div className="rounded-[10px] border border-teal-200 bg-teal-50/80 p-3.5 text-[12px] text-teal-950 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
                     <p className="font-bold">
-                      Rekomendasi & Catatan Pembina Sektoral BPS:
+                      Arahan & Rekomendasi Pembina Sektoral BPS:
                     </p>
                     <p className="mt-1 leading-relaxed">
                       {existingResp.pembinaFeedback}
@@ -1040,7 +1088,7 @@ export function AsesmenClient({
 
               {fillingAssessment.questions.map((q) => {
                 const currentAns = answerState[q.id] || {
-                  scaleValue: 3,
+                  scaleValue: q.questionType === "NUMBER" ? 0 : 2,
                   yesNoValue: "YA",
                   textAnswer: "",
                 };
@@ -1051,19 +1099,21 @@ export function AsesmenClient({
                     className="rounded-[10px] border border-[#e1e8f0] bg-[#f8fafc] p-4 dark:border-slate-800 dark:bg-slate-800/50"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#10345b] text-[11px] font-bold text-white">
                           {q.order}
                         </span>
                         <Badge variant="secondary">{q.domainCode}</Badge>
                         {q.indicatorRef && (
-                          <span className="text-[11px] font-mono text-slate-500">
-                            Indikator {q.indicatorRef}
+                          <span className="text-[11px] font-mono font-semibold text-[#087f80] dark:text-teal-300">
+                            {q.indicatorRef}
                           </span>
                         )}
                       </div>
                       <span className="text-[11px] text-slate-400">
-                        Bobot: {q.weight}
+                        {q.questionType === "NUMBER"
+                          ? "Informasi Kapasitas (Non-Skor)"
+                          : "Skala Penilaian 0–3"}
                       </span>
                     </div>
 
@@ -1076,7 +1126,119 @@ export function AsesmenClient({
                       </p>
                     )}
 
-                    {/* Input Controls by Question Type */}
+                    {/* 1. Pertanyaan Skala 0-3 (Bagian E Instrumen) */}
+                    {q.questionType === "SCALE_0_3" && (
+                      <div className="mt-3 space-y-2.5">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                          {[0, 1, 2, 3].map((sc) => {
+                            const active = currentAns.scaleValue === sc;
+                            const def = SCALE_0_3_DEFINITIONS[sc];
+                            return (
+                              <button
+                                key={sc}
+                                type="button"
+                                onClick={() =>
+                                  setAnswerState((prev) => ({
+                                    ...prev,
+                                    [q.id]: {
+                                      ...currentAns,
+                                      scaleValue: sc,
+                                    },
+                                  }))
+                                }
+                                className={`flex flex-col items-start rounded-[8px] border p-2.5 text-left transition ${
+                                  active
+                                    ? "border-[#087f80] bg-[#087f80] text-white"
+                                    : "border-[#e1e8f0] bg-white text-[#142b45] hover:border-[#087f80] dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                                }`}
+                              >
+                                <span className="text-[12px] font-bold">
+                                  {def.title}
+                                </span>
+                                <span
+                                  className={`mt-0.5 text-[10px] leading-snug ${
+                                    active ? "text-[#90dfd7]" : "text-slate-500"
+                                  }`}
+                                >
+                                  {def.desc}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <input
+                          type="text"
+                          value={currentAns.textAnswer}
+                          onChange={(e) =>
+                            setAnswerState((prev) => ({
+                              ...prev,
+                              [q.id]: {
+                                ...currentAns,
+                                textAnswer: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="Bukti dukung / catatan (cantumkan nomor SK, SOP, dokumen perencanaan, metadata, atau tautan)..."
+                          className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
+                        />
+                      </div>
+                    )}
+
+                    {/* 2. Pertanyaan Jumlah Aktual (No. 5, 6, 7, 11) */}
+                    {q.questionType === "NUMBER" && (
+                      <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                            Jumlah Aktual (Angka):
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={
+                              currentAns.scaleValue !== null &&
+                              currentAns.scaleValue !== undefined
+                                ? currentAns.scaleValue
+                                : 0
+                            }
+                            onChange={(e) =>
+                              setAnswerState((prev) => ({
+                                ...prev,
+                                [q.id]: {
+                                  ...currentAns,
+                                  scaleValue: Math.max(
+                                    0,
+                                    Number(e.target.value || 0)
+                                  ),
+                                },
+                              }))
+                            }
+                            className="mt-1 h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 font-bold text-[#10345b] dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                            Keterangan / Rincian (Opsional):
+                          </label>
+                          <input
+                            type="text"
+                            value={currentAns.textAnswer}
+                            onChange={(e) =>
+                              setAnswerState((prev) => ({
+                                ...prev,
+                                [q.id]: {
+                                  ...currentAns,
+                                  textAnswer: e.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="Sebutkan rincian unit/pegawai atau nama kegiatan..."
+                            className="mt-1 h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. Fallback Skala 1-5 */}
                     {q.questionType === "SCALE_1_5" && (
                       <div className="mt-3 space-y-2.5">
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
@@ -1102,14 +1264,14 @@ export function AsesmenClient({
                                 }`}
                               >
                                 <span className="text-[12px] font-bold">
-                                  {SCALE_LABELS[lvl].title}
+                                  {SCALE_1_5_LABELS[lvl].title}
                                 </span>
                                 <span
                                   className={`mt-0.5 text-[10px] leading-snug ${
                                     active ? "text-[#90dfd7]" : "text-slate-500"
                                   }`}
                                 >
-                                  {SCALE_LABELS[lvl].desc}
+                                  {SCALE_1_5_LABELS[lvl].desc}
                                 </span>
                               </button>
                             );
@@ -1127,12 +1289,13 @@ export function AsesmenClient({
                               },
                             }))
                           }
-                          placeholder="Tambahkan keterangan bukti / kondisi saat ini di OPD (opsional)..."
+                          placeholder="Tambahkan keterangan bukti dukung..."
                           className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
                         />
                       </div>
                     )}
 
+                    {/* 4. Fallback Pilihan Ya / Tidak */}
                     {q.questionType === "YES_NO" && (
                       <div className="mt-3 space-y-2.5">
                         <div className="flex flex-wrap gap-3">
@@ -1143,7 +1306,7 @@ export function AsesmenClient({
                             },
                             {
                               val: "TIDAK",
-                              label: "✗ TIDAK — Belum Tersedia / Masih Draf",
+                              label: "✗ TIDAK — Belum Tersedia",
                             },
                           ].map((opt) => {
                             const active = currentAns.yesNoValue === opt.val;
@@ -1162,7 +1325,7 @@ export function AsesmenClient({
                                 }
                                 className={`rounded-[8px] border px-4 py-2 text-[12px] font-semibold transition ${
                                   active
-                                    ? "border-[#10345b] bg-[#10345b] text-white dark:border-blue-500 dark:bg-blue-600"
+                                    ? "border-[#10345b] bg-[#10345b] text-white"
                                     : "border-[#e1e8f0] bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                                 }`}
                               >
@@ -1171,24 +1334,10 @@ export function AsesmenClient({
                             );
                           })}
                         </div>
-                        <input
-                          type="text"
-                          value={currentAns.textAnswer}
-                          onChange={(e) =>
-                            setAnswerState((prev) => ({
-                              ...prev,
-                              [q.id]: {
-                                ...currentAns,
-                                textAnswer: e.target.value,
-                              },
-                            }))
-                          }
-                          placeholder="Sebutkan nomor dokumen / tautan / keterangan pendukung..."
-                          className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
-                        />
                       </div>
                     )}
 
+                    {/* 5. Fallback Isian Teks */}
                     {q.questionType === "TEXT" && (
                       <div className="mt-3">
                         <textarea
@@ -1203,7 +1352,7 @@ export function AsesmenClient({
                               },
                             }))
                           }
-                          placeholder="Tuliskan uraian jawaban atau kendala teknis di instansi Anda..."
+                          placeholder="Tuliskan uraian jawaban..."
                           className="w-full rounded-[8px] border border-[#e1e8f0] bg-white p-3 text-[12px] dark:border-slate-700 dark:bg-slate-900"
                         />
                       </div>
@@ -1214,19 +1363,18 @@ export function AsesmenClient({
 
               <div>
                 <label className="block font-bold text-[#142b45] dark:text-white">
-                  Ringkasan Kendala & Kebutuhan Pendampingan OPD
+                  Catatan Tambahan / Kendala Utama & Kebutuhan Pembinaan OPD
                 </label>
                 <textarea
                   rows={2}
                   value={summaryNotes}
                   onChange={(e) => setSummaryNotes(e.target.value)}
-                  placeholder="Tuliskan kesimpulan umum atau permintaan topik klinik pembinaan kepada BPS Kabupaten Berau..."
+                  placeholder="Tuliskan kendala utama atau kebutuhan bimbingan teknis Statistik Sektoral di OPD saudara..."
                   className="mt-1.5 w-full rounded-[8px] border border-[#e1e8f0] p-3 text-[12px] dark:border-slate-700 dark:bg-slate-800"
                 />
               </div>
             </div>
 
-            {/* Modal Footer */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e1e8f0] bg-[#f8fafc] px-6 py-4 dark:border-slate-800 dark:bg-slate-900">
               <button
                 type="button"
@@ -1256,7 +1404,7 @@ export function AsesmenClient({
                   <span>
                     {submittingAnswers
                       ? "Mengirim..."
-                      : "Kirim Jawaban ke Pembina BPS"}
+                      : "Kirim Hasil Assessment ke BPS"}
                   </span>
                 </button>
               </div>
@@ -1265,14 +1413,14 @@ export function AsesmenClient({
         </div>
       )}
 
-      {/* MODAL 2: Pembina Sektoral Review & Feedback Modal */}
+      {/* MODAL 2: Pembina Sektoral Review & Arahan Pembinaan Modal */}
       {reviewingData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
           <div className="my-8 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] bg-[#10345b] px-6 py-4 text-white">
               <div>
                 <Badge variant="teal">
-                  Reviu Hasil Asesmen · {reviewingData.response.opdName}
+                  Reviu Hasil Assessment · {reviewingData.response.opdName}
                 </Badge>
                 <h3 className="mt-1 text-[18px] font-bold text-white">
                   {reviewingData.assessment.title}
@@ -1294,33 +1442,74 @@ export function AsesmenClient({
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-4 dark:border-slate-800 dark:bg-slate-800/50">
-                <div>
-                  <p className="text-[12px] text-slate-500">
-                    Instansi Pengisi Asesmen
-                  </p>
-                  <p className="text-[15px] font-bold text-[#142b45] dark:text-white">
-                    {reviewingData.response.opdName}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[12px] text-slate-500">
-                    Skor Kesiapan Terhitung
-                  </p>
-                  <p className="text-[18px] font-bold text-[#087f80] dark:text-teal-400">
-                    Level{" "}
-                    {reviewingData.response.readinessScore
-                      ?.toFixed(2)
-                      .replace(".", ",") || "-"}{" "}
-                    ({reviewingData.response.readinessPct || 0}%)
-                  </p>
+              {(() => {
+                const catInfo = getReadinessCategory(
+                  reviewingData.response.readinessPct
+                );
+                return (
+                  <div className="rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-4 dark:border-slate-800 dark:bg-slate-800/50">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] text-slate-500">
+                          Instansi Perangkat Daerah
+                        </p>
+                        <p className="text-[15px] font-bold text-[#142b45] dark:text-white">
+                          {reviewingData.response.opdName}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[12px] text-slate-500">
+                          Nilai & Kategori Kesiapan (Bagian F)
+                        </p>
+                        <div className="mt-0.5 flex items-center justify-end gap-2">
+                          <span className="text-[18px] font-bold text-[#087f80] dark:text-teal-400">
+                            {reviewingData.response.readinessPct || 0}%
+                          </span>
+                          <Badge variant={catInfo.badgeVariant}>
+                            {catInfo.category}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-2 border-t border-[#e1e8f0] pt-2 text-[12px] text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                      <strong>Arahan Pembinaan Sesuai Kategori:</strong>{" "}
+                      {catInfo.arahanPembinaan}
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* Pilih Cepat Rekomendasi Pembinaan Berdasarkan Bagian G */}
+              <div className="rounded-lg border border-[#d0e2ff] bg-[#ebf3ff]/40 p-3.5 dark:border-blue-900 dark:bg-blue-950/30">
+                <p className="text-[12px] font-bold text-[#10345b] dark:text-blue-300">
+                  Tambahkan Bentuk Pembinaan yang Disarankan (Bagian G Instrumen):
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {ARAH_PEMBINAAN_RECOMMENDATIONS.map((rec, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() =>
+                        setPembinaFeedbackInput((prev) =>
+                          prev.includes(rec.rekomendasi)
+                            ? prev
+                            : `${prev ? `${prev}\n• ` : "• "}[${rec.temuan}] ${
+                                rec.rekomendasi
+                              }`
+                        )
+                      }
+                      className="rounded-md border border-[#e1e8f0] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#142b45] hover:border-[#1557b0] hover:text-[#1557b0] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    >
+                      + {rec.temuan}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               {/* Answers Breakdown */}
               <div className="space-y-2.5">
                 <h4 className="font-bold text-[#142b45] dark:text-white">
-                  Rincian Jawaban Operator OPD:
+                  Rincian Jawaban Responden OPD:
                 </h4>
                 {reviewingData.assessment.questions.map((q) => {
                   const ans = reviewingData.response.answers.find(
@@ -1333,11 +1522,9 @@ export function AsesmenClient({
                     >
                       <div className="flex items-center justify-between text-[11px] text-slate-500">
                         <span className="font-bold text-[#10345b] dark:text-blue-300">
-                          Pertanyaan #{q.order} ({q.domainCode})
+                          No. {q.order} · {q.domainCode}
                         </span>
-                        {q.indicatorRef && (
-                          <span>Indikator {q.indicatorRef}</span>
-                        )}
+                        {q.indicatorRef && <span>{q.indicatorRef}</span>}
                       </div>
                       <p className="mt-1 font-semibold text-[#142b45] dark:text-white">
                         {q.questionText}
@@ -1345,11 +1532,24 @@ export function AsesmenClient({
                       <div className="mt-2 rounded bg-[#f8fafc] p-2.5 text-[12px] dark:bg-slate-800">
                         {ans ? (
                           <>
-                            {ans.scaleValue && (
-                              <p className="font-bold text-[#087f80]">
-                                {SCALE_LABELS[ans.scaleValue]?.title}
+                            {q.questionType === "NUMBER" ? (
+                              <p className="font-bold text-[#1557b0] dark:text-blue-300">
+                                Jumlah Aktual: {ans.scaleValue ?? 0}
                               </p>
-                            )}
+                            ) : q.questionType === "SCALE_0_3" &&
+                              ans.scaleValue !== null &&
+                              ans.scaleValue !== undefined ? (
+                              <p className="font-bold text-[#087f80]">
+                                {SCALE_0_3_DEFINITIONS[ans.scaleValue]?.title ||
+                                  `Skor ${ans.scaleValue}`}
+                              </p>
+                            ) : ans.scaleValue !== null &&
+                              ans.scaleValue !== undefined ? (
+                              <p className="font-bold text-[#087f80]">
+                                {SCALE_1_5_LABELS[ans.scaleValue]?.title ||
+                                  `Skor ${ans.scaleValue}`}
+                              </p>
+                            ) : null}
                             {ans.yesNoValue && (
                               <p className="font-bold text-[#10345b] dark:text-blue-300">
                                 Jawaban: {ans.yesNoValue}
@@ -1357,7 +1557,7 @@ export function AsesmenClient({
                             )}
                             {ans.textAnswer && (
                               <p className="mt-0.5 text-slate-600 dark:text-slate-300">
-                                {ans.textAnswer}
+                                Bukti / Catatan: {ans.textAnswer}
                               </p>
                             )}
                           </>
@@ -1375,14 +1575,14 @@ export function AsesmenClient({
               <form onSubmit={handleReviewSubmit} className="space-y-3 pt-2">
                 <div>
                   <label className="block font-bold text-[#142b45] dark:text-white">
-                    Catatan Rekomendasi & Tindak Lanjut Pembina Sektoral BPS
+                    Arahan Pembinaan & Tindak Lanjut Pembina Sektoral BPS
                   </label>
                   <textarea
                     rows={4}
                     required
                     value={pembinaFeedbackInput}
                     onChange={(e) => setPembinaFeedbackInput(e.target.value)}
-                    placeholder="Tuliskan arahan teknis, prioritas domain yang perlu diperbaiki, atau jadwal klinik pembinaan bagi OPD ini..."
+                    placeholder="Tuliskan arahan pembinaan berdasarkan kategori kesiapan dan temuan aspek..."
                     className="mt-1.5 w-full rounded-[8px] border border-[#e1e8f0] p-3 text-[13px] dark:border-slate-700 dark:bg-slate-800"
                   />
                 </div>
@@ -1402,7 +1602,7 @@ export function AsesmenClient({
                   >
                     {savingReview
                       ? "Menyimpan..."
-                      : "Simpan Rekomendasi Pembina"}
+                      : "Simpan Arahan Pembinaan"}
                   </button>
                 </div>
               </form>
@@ -1418,10 +1618,10 @@ export function AsesmenClient({
             <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] bg-[#10345b] px-6 py-4 text-white">
               <div>
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[#90dfd7]">
-                  PEMBUATAN INSTRUMEN ASESMEN PEMBINA BPS
+                  INSTRUMEN ASSESSMENT KESIAPAN OPD · BPS KABUPATEN BERAU
                 </span>
                 <h3 className="mt-0.5 text-[18px] font-bold text-white">
-                  Buat Paket Asesmen Baru untuk Operator OPD
+                  Buat Paket Assessment Kesiapan Baru
                 </h3>
               </div>
               <button
@@ -1447,7 +1647,8 @@ export function AsesmenClient({
               <div className="rounded-[10px] border border-[#d0e2ff] bg-[#ebf3ff]/60 p-4 dark:border-blue-900 dark:bg-blue-950/30">
                 <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#10345b] dark:text-blue-300">
                   <Sparkles className="h-4 w-4 text-[#087f80]" />
-                  Gunakan Template Cepat Asesmen BPS Kabupaten Berau:
+                  Gunakan Template Resmi Instrumen Assessment Kesiapan OPD BPS
+                  Kabupaten Berau:
                 </p>
                 <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   {ASSESSMENT_PRESET_TEMPLATES.map((tpl) => (
@@ -1461,7 +1662,7 @@ export function AsesmenClient({
                         {tpl.category}
                       </p>
                       <p className="mt-0.5 text-[11px] text-slate-500">
-                        {tpl.questions.length} pertanyaan siap pakai
+                        {tpl.questions.length} pertanyaan resmi siap pakai
                       </p>
                     </button>
                   ))}
@@ -1471,7 +1672,7 @@ export function AsesmenClient({
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="block font-bold text-[#142b45] dark:text-white">
-                    Judul Paket Asesmen
+                    Judul Paket Assessment
                   </label>
                   <input
                     type="text"
@@ -1484,21 +1685,22 @@ export function AsesmenClient({
 
                 <div>
                   <label className="block font-bold text-[#142b45] dark:text-white">
-                    Kategori Asesmen
+                    Kategori Instrumen
                   </label>
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
                     className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 dark:border-slate-700 dark:bg-slate-800"
                   >
-                    <option value="Diagnostik Pra-EPSS">
-                      Diagnostik Pra-EPSS (5 Domain)
+                    <option value="Instrumen Kesiapan OPD (7 Aspek)">
+                      Instrumen Kesiapan OPD Lengkap (7 Aspek · 30 Pertanyaan)
                     </option>
-                    <option value="Kesiapan Metadata & Romantik">
-                      Kesiapan Metadata INDAH & Romantik
+                    <option value="Kelembagaan, SDM & Perencanaan">
+                      Aspek I–III (Kelembagaan, SDM & Perencanaan)
                     </option>
-                    <option value="Evaluasi Pasca-Pembinaan">
-                      Evaluasi Tindak Lanjut Pasca-Pembinaan
+                    <option value="Metadata, Kualitas & Diseminasi">
+                      Aspek IV–VII (Standar Data, Metadata, Kualitas &
+                      Diseminasi)
                     </option>
                   </select>
                 </div>
@@ -1538,7 +1740,7 @@ export function AsesmenClient({
 
                 <div>
                   <label className="block font-bold text-[#142b45] dark:text-white">
-                    Mode Akses Pengisian Asesmen
+                    Mode Akses Pengisian Assessment
                   </label>
                   <select
                     value={newIsPublic ? "PUBLIC" : "PRIVATE"}
@@ -1592,9 +1794,43 @@ export function AsesmenClient({
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-bold text-[#10345b] dark:text-blue-300">
-                        Butir Pertanyaan #{idx + 1}
+                        Pertanyaan #{idx + 1}
                       </span>
                       <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            const orderNum = Number(e.target.value);
+                            const presetQ =
+                              OFFICIAL_30_INSTRUMEN_QUESTIONS.find(
+                                (item) => item.order === orderNum
+                              );
+                            if (presetQ) {
+                              setBuilderQuestions((prev) =>
+                                prev.map((item, i) =>
+                                  i === idx
+                                    ? {
+                                        ...presetQ,
+                                        order: idx + 1,
+                                      }
+                                    : item
+                                )
+                              );
+                            }
+                          }}
+                          className="h-[32px] max-w-[230px] rounded border border-[#e1e8f0] bg-white px-2 text-[11px] font-semibold text-[#087f80] dark:border-slate-700 dark:bg-slate-900 dark:text-teal-300"
+                        >
+                          <option value="">
+                            Pilih dari 30 Pertanyaan Instrumen...
+                          </option>
+                          {OFFICIAL_30_INSTRUMEN_QUESTIONS.map((item) => (
+                            <option key={item.order} value={item.order}>
+                              No. {item.order} — {item.questionText.slice(0, 55)}
+                              ...
+                            </option>
+                          ))}
+                        </select>
+
                         <select
                           value={q.domainCode}
                           onChange={(e) => {
@@ -1607,39 +1843,40 @@ export function AsesmenClient({
                           }}
                           className="h-[32px] rounded border border-[#e1e8f0] bg-white px-2 text-[11px] font-semibold dark:border-slate-700 dark:bg-slate-900"
                         >
-                          <option value="Domain 1">Domain 1 — SDI</option>
-                          <option value="Domain 2">Domain 2 — Kualitas</option>
-                          <option value="Domain 3">
-                            Domain 3 — Proses Bisnis
-                          </option>
-                          <option value="Domain 4">
-                            Domain 4 — Kelembagaan
-                          </option>
-                          <option value="Domain 5">Domain 5 — SSN</option>
+                          {SEVEN_ASPECT_OPTIONS.map((asp) => (
+                            <option key={asp} value={asp}>
+                              {asp}
+                            </option>
+                          ))}
                         </select>
 
                         <select
                           value={q.questionType}
                           onChange={(e) => {
-                            const val = e.target.value as
-                              | "SCALE_1_5"
-                              | "YES_NO"
-                              | "TEXT";
+                            const val =
+                              e.target.value as AssessmentQuestionType;
                             setBuilderQuestions((prev) =>
                               prev.map((item, i) =>
                                 i === idx
-                                  ? { ...item, questionType: val }
+                                  ? {
+                                      ...item,
+                                      questionType: val,
+                                      weight: val === "NUMBER" ? 0 : 1,
+                                    }
                                   : item
                               )
                             );
                           }}
                           className="h-[32px] rounded border border-[#e1e8f0] bg-white px-2 text-[11px] font-semibold dark:border-slate-700 dark:bg-slate-900"
                         >
-                          <option value="SCALE_1_5">
-                            Skala Kematangan (1–5)
+                          <option value="SCALE_0_3">
+                            Skala Penerapan (0–3)
+                          </option>
+                          <option value="NUMBER">
+                            Jumlah Aktual (Kapasitas Non-Skor)
                           </option>
                           <option value="YES_NO">Pilihan Ya / Tidak</option>
-                          <option value="TEXT">Isian Uraian / Kendala</option>
+                          <option value="TEXT">Isian Uraian / Catatan</option>
                         </select>
 
                         {builderQuestions.length > 1 && (
@@ -1667,7 +1904,7 @@ export function AsesmenClient({
                           )
                         );
                       }}
-                      placeholder="Tuliskan kalimat pertanyaan asesmen..."
+                      placeholder="Tuliskan kalimat pertanyaan assessment..."
                       className="h-[38px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[13px] dark:border-slate-700 dark:bg-slate-900"
                     />
 
@@ -1682,7 +1919,7 @@ export function AsesmenClient({
                           )
                         );
                       }}
-                      placeholder="Petunjuk teknis / keterangan kriteria penilaian (opsional)..."
+                      placeholder="Pilihan jawaban / petunjuk bukti dukung (opsional)..."
                       className="h-[34px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                     />
                   </div>
@@ -1703,15 +1940,151 @@ export function AsesmenClient({
                   className="h-[40px] rounded-[8px] bg-[#10345b] px-5 font-semibold text-white hover:bg-[#142b45]"
                 >
                   {creatingAssessment
-                    ? "Menerbitkan Asesmen..."
-                    : "Terbitkan Paket Asesmen ke OPD"}
+                    ? "Menerbitkan Assessment..."
+                    : "Terbitkan Paket Assessment"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* MODAL 4: Pedoman Skala Penilaian (0-3), Kategori Kesiapan & Arah Pembinaan (Bagian E, F, G Dokumen) */}
+      {showPedomanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
+          <div className="my-8 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[12px] border border-[#e1e8f0] bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3 border-b border-[#e1e8f0] bg-[#10345b] px-6 py-4 text-white">
+              <div>
+                <Badge variant="teal">
+                  Pedoman Resmi Assessment BPS Kabupaten Berau Tahun 2026
+                </Badge>
+                <h3 className="mt-1 text-[18px] font-bold text-white">
+                  Skala Penilaian (0–3), Kategori Kesiapan & Arah Pembinaan OPD
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPedomanModal(false)}
+                className="rounded-lg p-1.5 text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-[13px]">
+              {/* Bagian E: Skala Penilaian 0-3 */}
+              <div>
+                <h4 className="font-bold text-[#142b45] dark:text-white">
+                  E. Skala Penilaian Tingkat Penerapan (0–3)
+                </h4>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {[0, 1, 2, 3].map((sc) => {
+                    const def = SCALE_0_3_DEFINITIONS[sc];
+                    return (
+                      <div
+                        key={sc}
+                        className="rounded-lg border border-[#e1e8f0] bg-[#f8fafc] p-3 dark:border-slate-800 dark:bg-slate-800/50"
+                      >
+                        <p className="font-bold text-[#10345b] dark:text-blue-300">
+                          {def.title}
+                        </p>
+                        <p className="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
+                          {def.desc}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bagian F: Penghitungan Nilai dan Kategori Kesiapan */}
+              <div>
+                <h4 className="font-bold text-[#142b45] dark:text-white">
+                  F. Penghitungan Nilai & Kategori Kesiapan OPD
+                </h4>
+                <p className="mt-1 text-[12px] text-slate-600 dark:text-slate-400">
+                  Rumus:{" "}
+                  <strong>
+                    Nilai Kesiapan = (Total Skor Diperoleh ÷ Total Skor Maksimal)
+                    × 100
+                  </strong>
+                  . Pertanyaan jumlah digunakan sebagai informasi kapasitas SDM
+                  & kegiatan, bukan sebagai skor langsung.
+                </p>
+                <div className="mt-2.5 overflow-x-auto rounded-lg border border-[#e1e8f0] dark:border-slate-800">
+                  <table className="w-full text-left text-[12px]">
+                    <thead>
+                      <tr className="border-b border-[#e1e8f0] bg-[#f8fafc] font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
+                        <th className="px-3 py-2">Rentang Nilai</th>
+                        <th className="px-3 py-2">Kategori</th>
+                        <th className="px-3 py-2">Arahan Pembinaan BPS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
+                      {READINESS_CATEGORIES.map((cat) => (
+                        <tr key={cat.category}>
+                          <td className="px-3 py-2 font-bold">
+                            {cat.minPct}–{cat.maxPct}
+                          </td>
+                          <td className="px-3 py-2">
+                            <Badge variant={cat.badgeVariant}>
+                              {cat.category}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                            {cat.arahanPembinaan}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Bagian G: Arah Pembinaan Berdasarkan Hasil Assessment */}
+              <div>
+                <h4 className="font-bold text-[#142b45] dark:text-white">
+                  G. Arah Pembinaan Berdasarkan Temuan Assessment
+                </h4>
+                <div className="mt-2 overflow-x-auto rounded-lg border border-[#e1e8f0] dark:border-slate-800">
+                  <table className="w-full text-left text-[12px]">
+                    <thead>
+                      <tr className="border-b border-[#e1e8f0] bg-[#f8fafc] font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
+                        <th className="px-3 py-2">Temuan Assessment</th>
+                        <th className="px-3 py-2">
+                          Bentuk Pembinaan yang Disarankan
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#e1e8f0] dark:divide-slate-800">
+                      {ARAH_PEMBINAAN_RECOMMENDATIONS.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2 font-semibold text-[#142b45] dark:text-white">
+                            {item.temuan}
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                            {item.rekomendasi}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-[#e1e8f0] bg-[#f8fafc] px-6 py-3.5 dark:border-slate-800 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => setShowPedomanModal(false)}
+                className="h-[38px] rounded-[8px] bg-[#10345b] px-5 text-[12px] font-semibold text-white hover:bg-[#142b45]"
+              >
+                Tutup Pedoman
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

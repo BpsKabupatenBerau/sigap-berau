@@ -7,7 +7,7 @@ interface IncomingQuestion {
   indicatorRef?: string;
   questionText: string;
   helpText?: string;
-  questionType: "SCALE_1_5" | "YES_NO" | "TEXT";
+  questionType: "SCALE_0_3" | "NUMBER" | "SCALE_1_5" | "YES_NO" | "TEXT";
   weight?: number;
 }
 
@@ -81,12 +81,15 @@ export async function POST(request: Request) {
           questions: {
             create: questions.map((q, idx) => ({
               order: idx + 1,
-              domainCode: q.domainCode || "Domain 1",
+              domainCode: q.domainCode || "I. Kelembagaan dan Tata Kelola",
               indicatorRef: q.indicatorRef || null,
               questionText: q.questionText.trim(),
               helpText: q.helpText?.trim() || null,
-              questionType: q.questionType || "SCALE_1_5",
-              weight: Number(q.weight || 1),
+              questionType: q.questionType || "SCALE_0_3",
+              weight:
+                q.questionType === "NUMBER"
+                  ? 0
+                  : Number(q.weight !== undefined ? q.weight : 1),
             })),
           },
         } as Parameters<typeof prisma.assessment.create>[0]["data"],
@@ -228,33 +231,55 @@ export async function POST(request: Request) {
         );
       }
 
-      // Compute weighted readiness score (1.00 - 5.00) & percentage (0 - 100%)
+      // Compute readiness score & percentage according to Instrumen Assessment Section F:
+      // Nilai Kesiapan = (Total Skor Diperoleh ÷ Total Skor Maksimal) × 100
+      // Pertanyaan jumlah (NUMBER) tidak langsung dikonversi menjadi skor.
       const questionMap = new Map(
         assessment.questions.map((q) => [q.id, q])
       );
-      let weightedSum = 0;
-      let totalWeight = 0;
+      let obtainedWeightedScore = 0;
+      let maxPossibleWeightedScore = 0;
+      let uses0To3Scale = false;
 
       for (const ans of answers) {
         const q = questionMap.get(ans.questionId);
-        if (!q) continue;
+        if (!q || q.questionType === "NUMBER" || q.questionType === "TEXT") {
+          continue;
+        }
+        const w = q.weight > 0 ? q.weight : 1;
 
-        if (q.questionType === "SCALE_1_5" && ans.scaleValue) {
+        if (q.questionType === "SCALE_0_3") {
+          uses0To3Scale = true;
+          const val =
+            ans.scaleValue !== undefined && ans.scaleValue !== null
+              ? Math.min(3, Math.max(0, Number(ans.scaleValue)))
+              : 0;
+          obtainedWeightedScore += val * w;
+          maxPossibleWeightedScore += 3 * w;
+        } else if (q.questionType === "SCALE_1_5" && ans.scaleValue) {
           const val = Math.min(5, Math.max(1, Number(ans.scaleValue)));
-          weightedSum += val * q.weight;
-          totalWeight += q.weight;
+          obtainedWeightedScore += val * w;
+          maxPossibleWeightedScore += 5 * w;
         } else if (q.questionType === "YES_NO" && ans.yesNoValue) {
-          const equiv = ans.yesNoValue === "YA" ? 4.5 : 1.5;
-          weightedSum += equiv * q.weight;
-          totalWeight += q.weight;
+          const val = ans.yesNoValue === "YA" ? 3 : 0;
+          obtainedWeightedScore += val * w;
+          maxPossibleWeightedScore += 3 * w;
         }
       }
 
+      const readinessPct =
+        maxPossibleWeightedScore > 0
+          ? Math.round((obtainedWeightedScore / maxPossibleWeightedScore) * 100)
+          : 0;
       const readinessScore =
-        totalWeight > 0
-          ? Number((weightedSum / totalWeight).toFixed(2))
-          : 3.0;
-      const readinessPct = Math.round((readinessScore / 5) * 100);
+        maxPossibleWeightedScore > 0
+          ? Number(
+              (
+                (obtainedWeightedScore / maxPossibleWeightedScore) *
+                (uses0To3Scale ? 3 : 5)
+              ).toFixed(2)
+            )
+          : 0;
 
       const extraNotesWithRespondent =
         !effectiveUser && respondentName

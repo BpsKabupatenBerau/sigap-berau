@@ -1,12 +1,19 @@
 import { prisma } from "@/lib/prisma";
 
+export type AssessmentQuestionType =
+  | "SCALE_0_3"
+  | "NUMBER"
+  | "SCALE_1_5"
+  | "YES_NO"
+  | "TEXT";
+
 export interface PresetQuestionItem {
   order: number;
   domainCode: string;
   indicatorRef: string;
   questionText: string;
   helpText: string;
-  questionType: "SCALE_1_5" | "YES_NO" | "TEXT";
+  questionType: AssessmentQuestionType;
   weight: number;
 }
 
@@ -18,388 +25,675 @@ export interface AssessmentPresetTemplate {
   questions: PresetQuestionItem[];
 }
 
+export interface ReadinessCategoryInfo {
+  minPct: number;
+  maxPct: number;
+  category: "Belum Siap" | "Perlu Penguatan" | "Cukup Siap" | "Siap";
+  badgeVariant: "destructive" | "warning" | "teal" | "success";
+  arahanPembinaan: string;
+}
+
+// Bagian E: Skala Penilaian Resmi (0–3) dari Instrumen_Assessment_Kesiapan_OPD_Statistik_Sektoral_Berau.docx
+export const SCALE_0_3_DEFINITIONS: Record<
+  number,
+  { score: number; title: string; desc: string }
+> = {
+  0: {
+    score: 0,
+    title: "Skor 0 — Belum Tersedia",
+    desc: "Belum mengetahui / belum memahami atau belum memiliki mekanisme.",
+  },
+  1: {
+    score: 1,
+    title: "Skor 1 — Mengetahui (Belum Diterapkan)",
+    desc: "Memahami secara umum / ditunjuk informal, tetapi belum diterapkan.",
+  },
+  2: {
+    score: 2,
+    title: "Skor 2 — Sebagian Diterapkan",
+    desc: "Sudah melaksanakan sebagian, tetapi belum konsisten atau belum lengkap.",
+  },
+  3: {
+    score: 3,
+    title: "Skor 3 — Konsisten & Terdokumentasi",
+    desc: "Dilaksanakan konsisten dan memiliki bukti dukung / mekanisme yang berjalan.",
+  },
+};
+
+// Bagian F: Penghitungan Nilai dan Kategori Kesiapan (0–25, 26–50, 51–75, 76–100)
+export const READINESS_CATEGORIES: ReadinessCategoryInfo[] = [
+  {
+    minPct: 0,
+    maxPct: 25,
+    category: "Belum Siap",
+    badgeVariant: "destructive",
+    arahanPembinaan:
+      "Pembinaan mendasar mengenai konsep dan tahapan Statistik Sektoral.",
+  },
+  {
+    minPct: 26,
+    maxPct: 50,
+    category: "Perlu Penguatan",
+    badgeVariant: "warning",
+    arahanPembinaan:
+      "Penguatan pemahaman, tata kelola, dan penerapan dasar.",
+  },
+  {
+    minPct: 51,
+    maxPct: 75,
+    category: "Cukup Siap",
+    badgeVariant: "teal",
+    arahanPembinaan:
+      "Pendampingan untuk melengkapi dan meningkatkan konsistensi.",
+  },
+  {
+    minPct: 76,
+    maxPct: 100,
+    category: "Siap",
+    badgeVariant: "success",
+    arahanPembinaan:
+      "Penguatan keberlanjutan, kualitas, integrasi, dan pemanfaatan data.",
+  },
+];
+
+export function getReadinessCategory(pct?: number | null): ReadinessCategoryInfo {
+  const val = Math.min(100, Math.max(0, Math.round(pct || 0)));
+  if (val <= 25) return READINESS_CATEGORIES[0];
+  if (val <= 50) return READINESS_CATEGORIES[1];
+  if (val <= 75) return READINESS_CATEGORIES[2];
+  return READINESS_CATEGORIES[3];
+}
+
+// Bagian G: Arah Pembinaan Berdasarkan Hasil Assessment
+export const ARAH_PEMBINAAN_RECOMMENDATIONS: Array<{
+  aspekRef: string;
+  temuan: string;
+  rekomendasi: string;
+}> = [
+  {
+    aspekRef: "Aspek I & III",
+    temuan: "Belum memahami konsep Statistik Sektoral",
+    rekomendasi:
+      "Sosialisasi dasar Statistik Sektoral dan tahapan penyelenggaraan kegiatan statistik.",
+  },
+  {
+    aspekRef: "Aspek IV (No. 16–17)",
+    temuan: "Belum memahami Standar Data Statistik",
+    rekomendasi: "Bimbingan teknis Standar Data Statistik (SDS).",
+  },
+  {
+    aspekRef: "Aspek IV (No. 18–20)",
+    temuan: "Belum memiliki metadata",
+    rekomendasi:
+      "Pendampingan penyusunan metadata kegiatan (MS-Keg), variabel (MS-Var), dan indikator statistik (MS-Ind).",
+  },
+  {
+    aspekRef: "Aspek III (No. 14–15)",
+    temuan: "Belum memahami rekomendasi kegiatan statistik",
+    rekomendasi:
+      "Pendampingan konsultasi dan pengajuan rekomendasi melalui aplikasi Romantik BPS sesuai ketentuan.",
+  },
+  {
+    aspekRef: "Aspek V (No. 21–24)",
+    temuan: "Belum memiliki mekanisme pemeriksaan data",
+    rekomendasi:
+      "Bimbingan teknis penjaminan kualitas dan validasi data sebelum dipublikasikan.",
+  },
+  {
+    aspekRef: "Aspek VII (No. 28–30)",
+    temuan: "Belum memiliki publikasi/media diseminasi",
+    rekomendasi: "Pendampingan penyusunan publikasi dan penyajian data statistik.",
+  },
+  {
+    aspekRef: "Aspek VI (No. 25–27)",
+    temuan: "Belum terintegrasi dengan mekanisme Satu Data Indonesia",
+    rekomendasi:
+      "Fasilitasi koordinasi dan integrasi dengan Walidata (Diskominfo) serta OPD terkait.",
+  },
+];
+
+// 30 Pertanyaan Resmi dari Instrumen_Assessment_Kesiapan_OPD_Statistik_Sektoral_Berau.docx
+export const OFFICIAL_30_INSTRUMEN_QUESTIONS: PresetQuestionItem[] = [
+  // I. Kelembagaan dan Tata Kelola Statistik
+  {
+    order: 1,
+    domainCode: "I. Kelembagaan dan Tata Kelola",
+    indicatorRef: "Aspek I.1",
+    questionText:
+      "Apakah OPD telah menetapkan unit kerja atau pejabat yang bertanggung jawab dalam penyelenggaraan Statistik Sektoral?",
+    helpText:
+      "Pilihan Kondisi: Belum ada (Skor 0–1) / Ditunjuk informal (Skor 2) / Ditetapkan formal dengan SK (Skor 3). Sertakan nomor SK jika ada.",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 2,
+    domainCode: "I. Kelembagaan dan Tata Kelola",
+    indicatorRef: "Aspek I.2",
+    questionText:
+      "Apakah tersedia pembagian tugas antara bidang teknis, pengelola data, dan operator statistik?",
+    helpText:
+      "Pilihan Kondisi: Belum ada (Skor 0–1) / Sebagian (Skor 2) / Jelas dan terdokumentasi (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 3,
+    domainCode: "I. Kelembagaan dan Tata Kelola",
+    indicatorRef: "Aspek I.3",
+    questionText:
+      "Apakah OPD memiliki SOP/pedoman pengumpulan, pengolahan, pemeriksaan, dan penyebarluasan data?",
+    helpText:
+      "Pilihan Kondisi: Belum ada (Skor 0) / Sedang disusun (Skor 1–2) / Tersedia dan diterapkan (Skor 3). Cantumkan nomor/nama SOP pada kolom bukti.",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 4,
+    domainCode: "I. Kelembagaan dan Tata Kelola",
+    indicatorRef: "Aspek I.4",
+    questionText:
+      "Apakah kegiatan statistik telah dimasukkan ke dalam perencanaan dan program kerja OPD?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Sudah terintegrasi dalam Renja/DPA OPD (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+
+  // II. Sumber Daya Manusia dan Kompetensi
+  {
+    order: 5,
+    domainCode: "II. SDM dan Kompetensi",
+    indicatorRef: "Aspek II.5 (Kapasitas)",
+    questionText:
+      "Berapa jumlah pegawai yang secara aktif menangani kegiatan statistik dan pengelolaan data di OPD saudara?",
+    helpText:
+      "Pertanyaan Jumlah (Informasi Kapasitas): Isikan angka aktual jumlah orang (tuliskan 0 jika tidak ada). Tidak dikonversi langsung menjadi skor.",
+    questionType: "NUMBER",
+    weight: 0,
+  },
+  {
+    order: 6,
+    domainCode: "II. SDM dan Kompetensi",
+    indicatorRef: "Aspek II.6 (Kapasitas)",
+    questionText:
+      "Berapa pegawai yang memiliki latar belakang pendidikan statistik, matematika, atau bidang terkait di OPD saudara?",
+    helpText:
+      "Pertanyaan Jumlah (Informasi Kapasitas): Isikan angka aktual jumlah orang (tuliskan 0 jika tidak ada).",
+    questionType: "NUMBER",
+    weight: 0,
+  },
+  {
+    order: 7,
+    domainCode: "II. SDM dan Kompetensi",
+    indicatorRef: "Aspek II.7 (Kapasitas)",
+    questionText:
+      "Berapa pegawai yang memiliki kompetensi/sertifikat pelatihan statistik, pengolahan data, atau Statistik Sektoral di OPD saudara?",
+    helpText:
+      "Pertanyaan Jumlah (Informasi Kapasitas): Isikan angka aktual jumlah orang yang memiliki sertifikat pelatihan (tuliskan 0 jika tidak ada).",
+    questionType: "NUMBER",
+    weight: 0,
+  },
+  {
+    order: 8,
+    domainCode: "II. SDM dan Kompetensi",
+    indicatorRef: "Aspek II.8",
+    questionText:
+      "Apakah pegawai pengelola data mendapat pembinaan/pelatihan Statistik Sektoral dalam dua tahun terakhir di OPD saudara?",
+    helpText:
+      "Pilihan Kondisi: Belum pernah (Skor 0) / 1 kali (Skor 1) / 2–3 kali (Skor 2) / >3 kali (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 9,
+    domainCode: "II. SDM dan Kompetensi",
+    indicatorRef: "Aspek II.9",
+    questionText:
+      "Bagaimana kemampuan pegawai mengolah data dengan Excel, aplikasi statistik, atau perangkat pengolahan data lain di OPD saudara?",
+    helpText:
+      "Pilihan Kondisi: Belum mampu (Skor 0) / Dasar (Skor 1) / Menengah (Skor 2) / Mahir (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+
+  // III. Perencanaan dan Pelaksanaan Kegiatan Statistik
+  {
+    order: 10,
+    domainCode: "III. Perencanaan & Pelaksanaan",
+    indicatorRef: "Aspek III.10",
+    questionText:
+      "Apakah OPD telah mengidentifikasi kebutuhan data dan indikator untuk mendukung tugas dan fungsinya?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Sudah lengkap terdokumentasi (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 11,
+    domainCode: "III. Perencanaan & Pelaksanaan",
+    indicatorRef: "Aspek III.11 (Kapasitas)",
+    questionText:
+      "Berapa jumlah kegiatan pengumpulan atau kompilasi data yang dilaksanakan OPD dalam satu tahun?",
+    helpText:
+      "Pertanyaan Jumlah (Informasi Kapasitas): Isikan angka aktual jumlah kegiatan statistik/kompilasi data per tahun (tuliskan 0 jika tidak ada).",
+    questionType: "NUMBER",
+    weight: 0,
+  },
+  {
+    order: 12,
+    domainCode: "III. Perencanaan & Pelaksanaan",
+    indicatorRef: "Aspek III.12",
+    questionText:
+      "Apakah sebelum kegiatan statistik OPD menyusun rancangan yang mencakup tujuan, sasaran, variabel, metode, dan jadwal?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Sudah lengkap dalam KAK/TOR (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 13,
+    domainCode: "III. Perencanaan & Pelaksanaan",
+    indicatorRef: "Aspek III.13",
+    questionText:
+      "Apakah OPD memahami perbedaan data administrasi, kompilasi produk administrasi, dan kegiatan survei statistik?",
+    helpText:
+      "Pilihan Kondisi: Belum memahami (Skor 0–1) / Sebagian (Skor 2) / Memahami baik (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 14,
+    domainCode: "III. Perencanaan & Pelaksanaan",
+    indicatorRef: "Aspek III.14",
+    questionText:
+      "Apakah OPD berkonsultasi atau mengajukan rekomendasi kegiatan statistik kepada BPS sebelum melaksanakan kegiatan statistik sektoral yang memerlukannya?",
+    helpText:
+      "Pilihan Kondisi: Belum pernah (Skor 0–1) / Belum rutin (Skor 2) / Sesuai kebutuhan melalui Romantik BPS (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 15,
+    domainCode: "III. Perencanaan & Pelaksanaan",
+    indicatorRef: "Aspek III.15",
+    questionText:
+      "Apakah OPD berkoordinasi dengan BPS Kabupaten Berau dalam perencanaan atau pelaksanaan kegiatan Statistik Sektoral?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Kadang-kadang (Skor 2) / Rutin dan terjadwal (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+
+  // IV. Standar Data dan Metadata Statistik
+  {
+    order: 16,
+    domainCode: "IV. Standar Data & Metadata",
+    indicatorRef: "Aspek IV.16",
+    questionText:
+      "Apakah OPD memahami Standar Data Statistik, meliputi konsep, definisi, klasifikasi, ukuran, dan satuan?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Sudah memahami dengan baik (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 17,
+    domainCode: "IV. Standar Data & Metadata",
+    indicatorRef: "Aspek IV.17",
+    questionText:
+      "Apakah data dan indikator yang dihasilkan mengacu pada Standar Data Statistik yang berlaku?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Sudah mengacu pada SDSN/Katalog Standar Data (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 18,
+    domainCode: "IV. Standar Data & Metadata",
+    indicatorRef: "Aspek IV.18",
+    questionText:
+      "Apakah OPD telah menyusun metadata statistik untuk data atau indikator yang dihasilkan?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Sudah menyusun MS-Keg, MS-Var, MS-Ind (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 19,
+    domainCode: "IV. Standar Data & Metadata",
+    indicatorRef: "Aspek IV.19",
+    questionText:
+      "Apakah metadata memuat konsep, definisi, sumber data, metode pengumpulan, periode, dan penanggung jawab data?",
+    helpText:
+      "Pilihan Kondisi: Belum lengkap (Skor 0–1) / Sebagian lengkap (Skor 2) / Lengkap sesuai struktur baku (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 20,
+    domainCode: "IV. Standar Data & Metadata",
+    indicatorRef: "Aspek IV.20",
+    questionText:
+      "Apakah metadata dimutakhirkan apabila terjadi perubahan definisi, metode, sumber, atau proses pengumpulan data?",
+    helpText:
+      "Pilihan Kondisi: Tidak pernah (Skor 0) / Jika diperlukan (Skor 1–2) / Berkala dan terdokumentasi (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+
+  // V. Kualitas Data dan Pengolahan Data
+  {
+    order: 21,
+    domainCode: "V. Kualitas & Pengolahan Data",
+    indicatorRef: "Aspek V.21",
+    questionText:
+      "Apakah tersedia mekanisme pemeriksaan dan validasi data sebelum dipublikasikan atau disampaikan kepada pengguna?",
+    helpText:
+      "Pilihan Kondisi: Belum ada (Skor 0) / Belum terdokumentasi (Skor 1–2) / Ada dan terdokumentasi (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 22,
+    domainCode: "V. Kualitas & Pengolahan Data",
+    indicatorRef: "Aspek V.22",
+    questionText:
+      "Apakah OPD memeriksa kelengkapan, konsistensi, kewajaran, serta kesesuaian data dengan konsep dan definisinya?",
+    helpText:
+      "Pilihan Kondisi: Tidak pernah (Skor 0) / Kadang-kadang (Skor 1–2) / Selalu diperiksa secara sistematis (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 23,
+    domainCode: "V. Kualitas & Pengolahan Data",
+    indicatorRef: "Aspek V.23",
+    questionText:
+      "Apakah OPD mendokumentasikan sumber data, proses pengumpulan, pengolahan, dan hasil pemeriksaan?",
+    helpText:
+      "Pilihan Kondisi: Belum ada (Skor 0–1) / Sebagian (Skor 2) / Lengkap terdokumentasi (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 24,
+    domainCode: "V. Kualitas & Pengolahan Data",
+    indicatorRef: "Aspek V.24",
+    questionText:
+      "Apakah OPD mengevaluasi kualitas data dan menindaklanjuti kesalahan/ketidaksesuaian?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Kadang-kadang (Skor 2) / Berkala dan ditindaklanjuti (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+
+  // VI. Integrasi, Koordinasi, dan Pemanfaatan Data
+  {
+    order: 25,
+    domainCode: "VI. Integrasi, Koordinasi & Pemanfaatan",
+    indicatorRef: "Aspek VI.25",
+    questionText:
+      "Apakah OPD berkoordinasi dengan bidang lain atau OPD terkait untuk menghindari duplikasi dan perbedaan data?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Kadang-kadang (Skor 2) / Rutin melalui Forum Satu Data (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 26,
+    domainCode: "VI. Integrasi, Koordinasi & Pemanfaatan",
+    indicatorRef: "Aspek VI.26",
+    questionText:
+      "Apakah data OPD disampaikan atau diintegrasikan melalui portal data/mekanisme Satu Data Indonesia di Kabupaten Berau?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Sudah terintegrasi di Portal Satu Data Berau (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 27,
+    domainCode: "VI. Integrasi, Koordinasi & Pemanfaatan",
+    indicatorRef: "Aspek VI.27",
+    questionText:
+      "Apakah data statistik dimanfaatkan untuk perencanaan, penganggaran, monitoring, atau evaluasi program OPD?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Rutin dimanfaatkan dalam dokumen perencanaan (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+
+  // VII. Diseminasi dan Publikasi Statistik
+  {
+    order: 28,
+    domainCode: "VII. Diseminasi & Publikasi",
+    indicatorRef: "Aspek VII.28",
+    questionText:
+      "Apakah OPD memiliki media penyebarluasan data, seperti website, portal data, publikasi, atau laporan statistik?",
+    helpText:
+      "Pilihan Kondisi: Belum ada (Skor 0) / Ada tetapi belum aktif (Skor 1–2) / Ada dan aktif (Skor 3). Cantumkan tautan website/publikasi pada kolom bukti.",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 29,
+    domainCode: "VII. Diseminasi & Publikasi",
+    indicatorRef: "Aspek VII.29",
+    questionText:
+      "Apakah data yang disajikan dilengkapi periode data, sumber data, definisi indikator, dan keterangan lainnya?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0–1) / Sebagian (Skor 2) / Sudah lengkap (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+  {
+    order: 30,
+    domainCode: "VII. Diseminasi & Publikasi",
+    indicatorRef: "Aspek VII.30",
+    questionText:
+      "Apakah OPD memutakhirkan data yang dipublikasikan secara berkala dan memastikan data yang disajikan merupakan data terbaru?",
+    helpText:
+      "Pilihan Kondisi: Belum (Skor 0) / Tidak rutin (Skor 1–2) / Rutin dan terjadwal (Skor 3).",
+    questionType: "SCALE_0_3",
+    weight: 1,
+  },
+];
+
 export const ASSESSMENT_PRESET_TEMPLATES: AssessmentPresetTemplate[] = [
   {
-    id: "preset-pra-epss",
-    name: "Diagnostik Kesiapan Pra-EPSS 5 Domain (Rekomendasi BPS)",
-    category: "Diagnostik Pra-EPSS",
+    id: "preset-instrumen-berau-30",
+    name: "Instrumen Assessment Pemahaman dan Kesiapan OPD dalam Penyelenggaraan Statistik Sektoral (BPS Kab. Berau 2026)",
+    category: "Instrumen Kesiapan OPD (7 Aspek)",
     description:
-      "Instrumen pemetaan awal kesiapan Perangkat Daerah Kabupaten Berau pada 5 Domain EPSS (Standar Data, Metadata INDAH, Interoperabilitas, Kualitas Data, Proses Bisnis GSBPM, dan Kelembagaan SDI).",
-    questions: [
-      {
-        order: 1,
-        domainCode: "Domain 1",
-        indicatorRef: "10101",
-        questionText:
-          "Sejauh mana penerapan Standar Data Statistik (SDS) pada 2 kegiatan statistik sektoral di instansi Anda?",
-        helpText:
-          "Level 1: Belum menerapkan SDS · Level 2: Sebagian variabel sesuai Katalog SDS · Level 3: Seluruh variabel utama mengacu pada SDS & Perbup SDI · Level 4: Telah direviu berkala bersama Walidata · Level 5: Termutakhirkan dan terintegrasi penuh.",
-        questionType: "SCALE_1_5",
-        weight: 1.5,
-      },
-      {
-        order: 2,
-        domainCode: "Domain 1",
-        indicatorRef: "10201",
-        questionText:
-          "Apakah metadata kegiatan, variabel, dan indikator (MS-Keg, MS-Var, MS-Ind) telah diinput ke aplikasi INDAH BPS?",
-        helpText:
-          "Pilih Ya jika minimal draf metadata untuk 2 kegiatan statistik lokus EPSS telah disusun atau diajukan ke Walidata/INDAH BPS.",
-        questionType: "YES_NO",
-        weight: 1.5,
-      },
-      {
-        order: 3,
-        domainCode: "Domain 2",
-        indicatorRef: "20101",
-        questionText:
-          "Bagaimana tingkat kematangan dokumentasi analisis kebutuhan data dan konsultasi pengguna data di instansi Anda?",
-        helpText:
-          "Level 1: Belum terdokumentasi · Level 2: Ada undangan/notula rapat · Level 3: Sesuai SOP/Juknis resmi · Level 4: Dievaluasi lintas unit · Level 5: Perbaikan berkelanjutan berbasis survei kepuasan.",
-        questionType: "SCALE_1_5",
-        weight: 1.2,
-      },
-      {
-        order: 4,
-        domainCode: "Domain 3",
-        indicatorRef: "30101",
-        questionText:
-          "Apakah 2 kegiatan statistik sektoral yang dinilaikan telah memiliki surat Rekomendasi Kegiatan Statistik melalui aplikasi Romantik BPS?",
-        helpText:
-          "Pemberitahuan rancangan kegiatan statistik ke BPS melalui romantik.web.bps.go.id sebelum pengumpulan data.",
-        questionType: "YES_NO",
-        weight: 1.5,
-      },
-      {
-        order: 5,
-        domainCode: "Domain 3",
-        indicatorRef: "30201",
-        questionText:
-          "Sejauh mana tahapan Perencanaan, Pengumpulan, Pemeriksaan (Editing/Coding), dan Diseminasi Data memiliki KAK/TOR dan Pedoman Teknis tertulis?",
-        helpText:
-          "Nilai kematangan ketersediaan KAK/TOR, instrumen kuesioner, buku pedoman petugas, dan berita acara validasi data.",
-        questionType: "SCALE_1_5",
-        weight: 1.3,
-      },
-      {
-        order: 6,
-        domainCode: "Domain 4",
-        indicatorRef: "40101",
-        questionText:
-          "Bagaimana kesiapan SK Tim Pelaksana Statistik Sektoral / Produsen Data dan koordinasi dengan Walidata (Diskominfo) di instansi Anda?",
-        helpText:
-          "Mencakup penetapan SK Kepala Dinas, pembagian tugas pengelola data, serta keaktifan dalam Forum Satu Data Kabupaten Berau.",
-        questionType: "SCALE_1_5",
-        weight: 1.0,
-      },
-      {
-        order: 7,
-        domainCode: "Domain 5",
-        indicatorRef: "50101",
-        questionText:
-          "Tuliskan kendala utama yang dihadapi Operator OPD dalam menyiapkan bukti dukung EPSS serta topik yang paling membutuhkan pendampingan teknis BPS:",
-        helpText:
-          "Jelaskan secara spesifik (misalnya: kesulitan pengisian MS-Ind di INDAH, penyusunan SOP internal, atau kelengkapan bukti Level 3–4).",
-        questionType: "TEXT",
-        weight: 1.0,
-      },
-    ],
+      "Instrumen resmi BPS Kabupaten Berau Tahun 2026 mencakup 7 Aspek dan 30 Pertanyaan (Kelembagaan, SDM & Kompetensi, Perencanaan Kegiatan, Standar Data & Metadata, Kualitas & Pengolahan Data, Integrasi & Pemanfaatan, serta Diseminasi Statistik) dengan Skala 0–3 dan Pertanyaan Kapasitas Jumlah.",
+    questions: OFFICIAL_30_INSTRUMEN_QUESTIONS,
   },
   {
-    id: "preset-romantik-indah",
-    name: "Asesmen Kesiapan Metadata INDAH & Rekomendasi Romantik",
-    category: "Kesiapan Metadata & Romantik",
+    id: "preset-aspek-1-2-3",
+    name: "Assessment Kesiapan: Aspek I (Kelembagaan), Aspek II (SDM) & Aspek III (Perencanaan Kegiatan)",
+    category: "Kelembagaan, SDM & Perencanaan",
     description:
-      "Kuesioner khusus untuk memeriksa kesiapan pengajuan Rekomendasi Statistik (Romantik) dan kelengkapan Metadata Baku (INDAH) pada 2 lokus kegiatan statistik sektoral OPD.",
-    questions: [
-      {
-        order: 1,
-        domainCode: "Domain 3",
-        indicatorRef: "30101",
-        questionText:
-          "Apakah instansi Anda telah menetapkan 2 judul kegiatan statistik sektoral utama beserta KAK/TOR tahun berjalan?",
-        helpText:
-          "Pastikan 2 kegiatan tersebut menghasilkan output data sektoral secara rutin/berkala.",
-        questionType: "YES_NO",
-        weight: 1.5,
-      },
-      {
-        order: 2,
-        domainCode: "Domain 3",
-        indicatorRef: "30101",
-        questionText:
-          "Sejauh mana kesiapan dokumen rancangan kegiatan untuk diajukan ke aplikasi Romantik BPS (romantik.web.bps.go.id)?",
-        helpText:
-          "Level 1: Belum ada akun/dokumen · Level 2: Draf KAK tersedia · Level 3: Sudah diajukan di Romantik · Level 4: Rekomendasi terbit & ditindaklanjuti · Level 5: Evaluasi kepatuhan rekomendasi terdokumentasi.",
-        questionType: "SCALE_1_5",
-        weight: 1.5,
-      },
-      {
-        order: 3,
-        domainCode: "Domain 1",
-        indicatorRef: "10201",
-        questionText:
-          "Sejauh mana kelengkapan penyusunan Metadata Kegiatan (MS-Keg), Variabel (MS-Var), dan Indikator (MS-Ind) pada 2 kegiatan tersebut?",
-        helpText:
-          "Nilai kesiapan konsep, definisi, klasifikasi, ukuran, satuan, dan rumus penghitungan indikator.",
-        questionType: "SCALE_1_5",
-        weight: 1.5,
-      },
-      {
-        order: 4,
-        domainCode: "Domain 1",
-        indicatorRef: "10301",
-        questionText:
-          "Apakah tabel output data telah disiapkan dalam format terbuka (CSV/XLSX/API) untuk dibagi-pakaikan ke Portal Satu Data Berau?",
-        helpText:
-          "Kesiapan interoperabilitas data bersama Walidata Daerah (Diskominfo Kab. Berau).",
-        questionType: "YES_NO",
-        weight: 1.0,
-      },
-      {
-        order: 5,
-        domainCode: "Domain 1",
-        indicatorRef: "10201",
-        questionText:
-          "Sebutkan 2 judul kegiatan statistik sektoral yang akan dinilaikan beserta kendala teknis yang dihadapi saat ini:",
-        helpText:
-          "Cantumkan judul Kegiatan 1 dan Kegiatan 2 serta bantuan teknis yang diperlukan dari Tim Pembina BPS.",
-        questionType: "TEXT",
-        weight: 1.0,
-      },
-    ],
+      "Bagian I–III Instrumen Kesiapan OPD BPS Kabupaten Berau (Pertanyaan No. 1 s.d. 15): Menilai tata kelola, kapasitas jumlah SDM statistik, identifikasi kebutuhan data, dan koordinasi rekomendasi Romantik BPS.",
+    questions: OFFICIAL_30_INSTRUMEN_QUESTIONS.slice(0, 15).map((q, idx) => ({
+      ...q,
+      order: idx + 1,
+    })),
   },
   {
-    id: "preset-pasca-pembinaan",
-    name: "Evaluasi Tindak Lanjut Pasca-Pembinaan Statistik Sektoral",
-    category: "Evaluasi Pasca-Pembinaan",
+    id: "preset-aspek-4-5-6-7",
+    name: "Assessment Kesiapan: Aspek IV (Standar Data & Metadata), Aspek V (Kualitas), Aspek VI (Integrasi) & Aspek VII (Diseminasi)",
+    category: "Metadata, Kualitas & Diseminasi",
     description:
-      "Instrumen evaluasi progres tindak lanjut OPD setelah mengikuti kegiatan pembinaan/klinik statistik sektoral bersama BPS Kabupaten Berau.",
-    questions: [
-      {
-        order: 1,
-        domainCode: "Domain 4",
-        indicatorRef: "40202",
-        questionText:
-          "Sejauh mana rekomendasi hasil pembinaan BPS sebelumnya telah ditindaklanjuti melalui perbaikan dokumen atau SOP di instansi Anda?",
-        helpText:
-          "Level 1: Belum ditindaklanjuti · Level 3: Seluruh dokumen Level 3 telah dilengkapi · Level 5: Reviu berkala dan inovasi telah berjalan.",
-        questionType: "SCALE_1_5",
-        weight: 1.5,
-      },
-      {
-        order: 2,
-        domainCode: "Domain 2",
-        indicatorRef: "20201",
-        questionText:
-          "Apakah laporan evaluasi kualitas data dan pemeriksaan kewajaran data (editing/validasi) sudah disusun untuk kedua kegiatan statistik?",
-        helpText:
-          "Mencakup berita acara pemeriksaan data antara pengumpul data dan penanggung jawab bidang.",
-        questionType: "YES_NO",
-        weight: 1.2,
-      },
-      {
-        order: 3,
-        domainCode: "Domain 5",
-        indicatorRef: "50101",
-        questionText:
-          "Bagaimana tingkat pemanfaatan data hasil kegiatan statistik sektoral Anda dalam dokumen perencanaan daerah (Renja/RKPD/RPJMD)?",
-        helpText:
-          "Nilai sejauh mana data statistik sektoral dikutip dan digunakan sebagai dasar kebijakan pimpinan.",
-        questionType: "SCALE_1_5",
-        weight: 1.3,
-      },
-      {
-        order: 4,
-        domainCode: "Domain 4",
-        indicatorRef: "40101",
-        questionText:
-          "Tuliskan ringkasan tindak lanjut yang telah diselesaikan serta indikator EPSS yang masih memerlukan verifikasi ulang Pembina BPS:",
-        helpText:
-          "Sebutkan kode indikator (mis. 10101, 20102) yang ingin diprioritaskan pada klinik pembinaan berikutnya.",
-        questionType: "TEXT",
-        weight: 1.0,
-      },
-    ],
+      "Bagian IV–VII Instrumen Kesiapan OPD BPS Kabupaten Berau (Pertanyaan No. 16 s.d. 30): Menilai penerapan Standar Data, Metadata, validasi kualitas data, integrasi Satu Data Berau, dan publikasi statistik.",
+    questions: OFFICIAL_30_INSTRUMEN_QUESTIONS.slice(15, 30).map((q, idx) => ({
+      ...q,
+      order: idx + 1,
+    })),
   },
 ];
 
 export async function ensureDefaultAssessmentsSeeded() {
   try {
-    const existingCount = await prisma.assessment.count();
-    if (existingCount > 0) return;
-
-    const [pembinaUser, opds] = await Promise.all([
+    const [pembinaUser, opds, existingAssessments] = await Promise.all([
       prisma.user.findFirst({
         where: {
           role: { in: ["PEMBINA_SEKTORAL", "SUPERADMIN"] },
         },
       }),
       prisma.opd.findMany({ orderBy: { code: "asc" } }),
+      prisma.assessment.findMany({ select: { id: true, title: true } }),
     ]);
 
-    const preset1 = ASSESSMENT_PRESET_TEMPLATES[0];
-    const preset2 = ASSESSMENT_PRESET_TEMPLATES[1];
+    // Remove the previously seeded "38 Indikator Juknis EPSS" assessment if it was created by mistake
+    const wrongJuknis = existingAssessments.filter(
+      (a) =>
+        a.title.includes("38 Indikator") ||
+        a.title.includes("Petunjuk Teknis Penilaian EPSS")
+    );
+    for (const item of wrongJuknis) {
+      await prisma.assessment.delete({ where: { id: item.id } });
+    }
 
-    const createdAssessment1 = await prisma.assessment.create({
-      data: {
-        title:
-          "Asesmen Diagnostik Kesiapan Pra-EPSS & Satu Data Indonesia Tahun 2026",
-        description: preset1.description,
-        category: preset1.category,
-        periodYear: 2026,
-        status: "AKTIF",
-        dueDate: new Date("2026-11-30T23:59:59.000Z"),
-        targetOpdId: null, // Semua OPD
-        createdById: pembinaUser?.id || null,
-        questions: {
-          create: preset1.questions.map((q) => ({
-            order: q.order,
-            domainCode: q.domainCode,
-            indicatorRef: q.indicatorRef,
-            questionText: q.questionText,
-            helpText: q.helpText,
-            questionType: q.questionType,
-            weight: q.weight,
-          })),
+    const mainPreset = ASSESSMENT_PRESET_TEMPLATES[0]; // 30 Pertanyaan Resmi Instrumen Assessment Kesiapan OPD
+    const hasMainInstrumen = existingAssessments.some(
+      (a) =>
+        a.title.includes("Pemahaman dan Kesiapan OPD") ||
+        a.title.includes("Instrumen Assessment")
+    );
+
+    if (!hasMainInstrumen) {
+      const createdMain = await prisma.assessment.create({
+        data: {
+          title: mainPreset.name,
+          description: mainPreset.description,
+          category: mainPreset.category,
+          periodYear: 2026,
+          status: "AKTIF",
+          dueDate: new Date("2026-12-20T23:59:59.000Z"),
+          targetOpdId: null, // Semua OPD
+          createdById: pembinaUser?.id || null,
+          questions: {
+            create: mainPreset.questions.map((q) => ({
+              order: q.order,
+              domainCode: q.domainCode,
+              indicatorRef: q.indicatorRef,
+              questionText: q.questionText,
+              helpText: q.helpText,
+              questionType: q.questionType,
+              weight: q.weight,
+            })),
+          },
         },
-      },
-      include: { questions: { orderBy: { order: "asc" } } },
-    });
+        include: { questions: { orderBy: { order: "asc" } } },
+      });
 
-    await prisma.assessment.create({
-      data: {
-        title:
-          "Asesmen Kesiapan Metadata INDAH & Pengajuan Rekomendasi Romantik BPS",
-        description: preset2.description,
-        category: preset2.category,
-        periodYear: 2026,
-        status: "AKTIF",
-        dueDate: new Date("2026-12-15T23:59:59.000Z"),
-        targetOpdId: null,
-        createdById: pembinaUser?.id || null,
-        questions: {
-          create: preset2.questions.map((q) => ({
-            order: q.order,
-            domainCode: q.domainCode,
-            indicatorRef: q.indicatorRef,
-            questionText: q.questionText,
-            helpText: q.helpText,
-            questionType: q.questionType,
-            weight: q.weight,
-          })),
-        },
-      },
-    });
+      // Seed contoh respons OPD pada Instrumen 30 Pertanyaan sesuai Skala 0-3 dan Jumlah Aktual
+      if (opds.length >= 2 && createdMain.questions.length > 0) {
+        const sampleConfigs = [
+          {
+            opd: opds[0], // Dinkes Berau
+            status: "DIREVIU",
+            baseScore: 3, // Siap (76-100%)
+            summaryNotes:
+              "SK Tim Statistik Sektoral dan SOP Pengelolaan Data Kesehatan telah ditetapkan. Memiliki 4 pengelola data aktif dan 3 kegiatan kompilasi data rutin.",
+            pembinaFeedback:
+              "Kategori Kesiapan: SIAP (86%). Arahan Pembinaan: Penguatan keberlanjutan, kualitas, integrasi, dan pemanfaatan data serta pemutakhiran metadata berkala di INDAH BPS.",
+          },
+          {
+            opd: opds[1], // Diskominfo Berau
+            status: "DIKIRIM",
+            baseScore: 2, // Cukup Siap (51-75%)
+            summaryNotes:
+              "Sebagai Walidata Daerah, integrasi Portal Satu Data Berau telah berjalan baik, namun masih memerlukan bimbingan teknis penyusunan SOP validasi data lintas bidang.",
+            pembinaFeedback: null,
+          },
+        ];
 
-    // Seed sample responses for the first 3 OPDs so Pembina & Operator OPD immediately see rich data
-    if (opds.length >= 2 && createdAssessment1.questions.length > 0) {
-      const sampleConfigs = [
-        {
-          opd: opds[0], // Dinkes
-          status: "DIREVIU",
-          scaleBase: 4,
-          summaryNotes:
-            "Kedua kegiatan statistik kesehatan (Profil Kesehatan & Surveilans Gizi) telah memiliki SK, SOP, dan rekomendasi Romantik, namun memerlukan pendampingan penajaman narasi Level 4 pada Domain 2.",
-          pembinaFeedback:
-            "Kesiapan Dinkes Berau sangat baik (Rata-rata Level 4,00). Segera unggah bukti evaluasi berkala kepuasan pengguna data pada Indikator 20101 untuk mengunci target Level 4.",
-        },
-        {
-          opd: opds[1], // Diskominfo
-          status: "DIKIRIM",
-          scaleBase: 4,
-          summaryNotes:
-            "Sebagai Walidata Daerah, Portal Satu Data Berau dan pedoman interoperabilitas telah berjalan. Mohon arahan terkait integrasi SPLP dengan portal nasional.",
-          pembinaFeedback: null,
-        },
-        {
-          opd: opds[2] || opds[0], // Disdik
-          status: "DRAF",
-          scaleBase: 3,
-          summaryNotes:
-            "Sedang melengkapi pengisian metadata variabel (MS-Var) pada aplikasi INDAH BPS untuk Pendataan Satuan Pendidikan.",
-          pembinaFeedback: null,
-        },
-      ];
+        for (const cfg of sampleConfigs) {
+          if (!cfg.opd) continue;
+          const opdOperator = await prisma.user.findFirst({
+            where: { opdId: cfg.opd.id, role: "OPERATOR_OPD" },
+          });
 
-      for (const cfg of sampleConfigs) {
-        if (!cfg.opd) continue;
-        const opdOperator = await prisma.user.findFirst({
-          where: { opdId: cfg.opd.id, role: "OPERATOR_OPD" },
-        });
+          let totalObtainedScore = 0;
+          let maxPossibleScore = 0;
 
-        let weightedSum = 0;
-        let totalWeight = 0;
+          const answerPayloads = createdMain.questions.map((q, idx) => {
+            if (q.questionType === "NUMBER") {
+              // Pertanyaan Jumlah (No. 5, 6, 7, 11): diisi angka aktual, tidak dikonversi menjadi skor langsung
+              const actualCount =
+                q.order === 5
+                  ? 4
+                  : q.order === 6
+                  ? 1
+                  : q.order === 7
+                  ? 2
+                  : 3;
+              return {
+                questionId: q.id,
+                scaleValue: actualCount,
+                yesNoValue: null,
+                textAnswer: `Data kapasitas aktual pada ${cfg.opd.shortName}: ${actualCount}.`,
+              };
+            }
 
-        const answerPayloads = createdAssessment1.questions.map((q, idx) => {
-          if (q.questionType === "SCALE_1_5") {
-            const val = Math.min(5, Math.max(1, cfg.scaleBase - (idx % 2)));
-            weightedSum += val * q.weight;
-            totalWeight += q.weight;
+            // Pertanyaan Skala 0-3
+            const score0to3 = Math.min(
+              3,
+              Math.max(0, cfg.baseScore - (idx % 3 === 0 ? 1 : 0))
+            );
+            totalObtainedScore += score0to3;
+            maxPossibleScore += 3;
+
             return {
               questionId: q.id,
-              scaleValue: val,
+              scaleValue: score0to3,
               yesNoValue: null,
-              textAnswer: `Pelaksanaan pada ${cfg.opd.shortName} telah mengacu pada pedoman internal dan regulasi Satu Data Kabupaten Berau.`,
+              textAnswer:
+                score0to3 === 3
+                  ? `Telah dilaksanakan konsisten dan terdokumentasi di ${cfg.opd.shortName}.`
+                  : `Sudah dilaksanakan sebagian di ${cfg.opd.shortName}.`,
             };
-          } else if (q.questionType === "YES_NO") {
-            const isYes = cfg.scaleBase >= 3;
-            const numericEquiv = isYes ? 4 : 2;
-            weightedSum += numericEquiv * q.weight;
-            totalWeight += q.weight;
-            return {
-              questionId: q.id,
-              scaleValue: null,
-              yesNoValue: isYes ? "YA" : "TIDAK",
-              textAnswer: isYes
-                ? "Telah dilaksanakan pada kedua lokus kegiatan statistik sektoral."
-                : "Masih dalam tahap penyusunan draf.",
-            };
-          } else {
-            return {
-              questionId: q.id,
-              scaleValue: null,
-              yesNoValue: null,
-              textAnswer: cfg.summaryNotes,
-            };
-          }
-        });
+          });
 
-        const readinessScore =
-          totalWeight > 0
-            ? Number((weightedSum / totalWeight).toFixed(2))
-            : 3.0;
-        const readinessPct = Math.round((readinessScore / 5) * 100);
+          const readinessPct =
+            maxPossibleScore > 0
+              ? Math.round((totalObtainedScore / maxPossibleScore) * 100)
+              : 0;
+          const readinessScore =
+            maxPossibleScore > 0
+              ? Number(((totalObtainedScore / maxPossibleScore) * 3).toFixed(2))
+              : 0;
 
-        await prisma.assessmentResponse.upsert({
-          where: {
-            assessmentId_opdId: {
-              assessmentId: createdAssessment1.id,
+          await prisma.assessmentResponse.upsert({
+            where: {
+              assessmentId_opdId: {
+                assessmentId: createdMain.id,
+                opdId: cfg.opd.id,
+              },
+            },
+            update: {},
+            create: {
+              assessmentId: createdMain.id,
               opdId: cfg.opd.id,
+              submittedById: opdOperator?.id || null,
+              status: cfg.status,
+              readinessScore,
+              readinessPct,
+              summaryNotes: cfg.summaryNotes,
+              pembinaFeedback: cfg.pembinaFeedback,
+              reviewedById: cfg.status === "DIREVIU" ? pembinaUser?.id : null,
+              submittedAt: cfg.status !== "DRAF" ? new Date() : null,
+              reviewedAt: cfg.status === "DIREVIU" ? new Date() : null,
+              answers: {
+                create: answerPayloads,
+              },
             },
-          },
-          update: {},
-          create: {
-            assessmentId: createdAssessment1.id,
-            opdId: cfg.opd.id,
-            submittedById: opdOperator?.id || null,
-            status: cfg.status,
-            readinessScore,
-            readinessPct,
-            summaryNotes: cfg.summaryNotes,
-            pembinaFeedback: cfg.pembinaFeedback,
-            reviewedById: cfg.status === "DIREVIU" ? pembinaUser?.id : null,
-            submittedAt: cfg.status !== "DRAF" ? new Date() : null,
-            reviewedAt: cfg.status === "DIREVIU" ? new Date() : null,
-            answers: {
-              create: answerPayloads,
-            },
-          },
-        });
+          });
+        }
       }
     }
   } catch {
     // Gracefully ignore if table has not been pushed yet
   }
 }
-
