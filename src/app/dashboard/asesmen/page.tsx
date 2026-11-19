@@ -70,54 +70,68 @@ export default async function AsesmenPage() {
       },
     });
 
-    serializedAssessments = rawAssessments.map((a) => ({
-      id: a.id,
-      title: a.title,
-      description: a.description,
-      category: a.category,
-      periodYear: a.periodYear,
-      status: a.status,
-      dueDate: a.dueDate.toISOString(),
-      targetOpdId: a.targetOpdId,
-      targetOpdName: a.targetOpd?.name || null,
-      targetOpdShortName: a.targetOpd?.shortName || null,
-      createdByName:
-        a.createdBy?.name || "Tim Pembina Statistik Sektoral BPS Kab. Berau",
-      createdAt: a.createdAt.toISOString(),
-      questions: a.questions.map((q) => ({
-        id: q.id,
-        order: q.order,
-        domainCode: q.domainCode,
-        indicatorRef: q.indicatorRef,
-        questionText: q.questionText,
-        helpText: q.helpText,
-        questionType: q.questionType as "SCALE_1_5" | "YES_NO" | "TEXT",
-        weight: q.weight,
-      })),
-      responses: a.responses.map((r) => ({
-        id: r.id,
-        assessmentId: r.assessmentId,
-        opdId: r.opdId,
-        opdName: r.opd.name,
-        opdShortName: r.opd.shortName,
-        status: r.status,
-        readinessScore: r.readinessScore,
-        readinessPct: r.readinessPct,
-        summaryNotes: r.summaryNotes,
-        pembinaFeedback: r.pembinaFeedback,
-        submittedByName: r.submittedBy?.name || null,
-        reviewedByName: r.reviewedBy?.name || null,
-        submittedAt: r.submittedAt?.toISOString() || null,
-        reviewedAt: r.reviewedAt?.toISOString() || null,
-        answers: r.answers.map((ans) => ({
-          id: ans.id,
-          questionId: ans.questionId,
-          scaleValue: ans.scaleValue,
-          yesNoValue: ans.yesNoValue,
-          textAnswer: ans.textAnswer,
+    serializedAssessments = rawAssessments.map((a) => {
+      const anyAssessment = a as unknown as { isPublic?: boolean };
+      return {
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        category: a.category,
+        periodYear: a.periodYear,
+        status: a.status,
+        isPublic:
+          typeof anyAssessment.isPublic === "boolean"
+            ? anyAssessment.isPublic
+            : true,
+        dueDate: a.dueDate.toISOString(),
+        targetOpdId: a.targetOpdId,
+        targetOpdName: a.targetOpd?.name || null,
+        targetOpdShortName: a.targetOpd?.shortName || null,
+        createdByName:
+          a.createdBy?.name || "Tim Pembina Statistik Sektoral BPS Kab. Berau",
+        createdAt: a.createdAt.toISOString(),
+        questions: a.questions.map((q) => ({
+          id: q.id,
+          order: q.order,
+          domainCode: q.domainCode,
+          indicatorRef: q.indicatorRef,
+          questionText: q.questionText,
+          helpText: q.helpText,
+          questionType: q.questionType as "SCALE_1_5" | "YES_NO" | "TEXT",
+          weight: q.weight,
         })),
-      })),
-    }));
+        responses: a.responses.map((r) => {
+          const anyResp = r as unknown as {
+            respondentName?: string | null;
+            respondentNip?: string | null;
+          };
+          return {
+            id: r.id,
+            assessmentId: r.assessmentId,
+            opdId: r.opdId,
+            opdName: r.opd.name,
+            opdShortName: r.opd.shortName,
+            status: r.status,
+            readinessScore: r.readinessScore,
+            readinessPct: r.readinessPct,
+            summaryNotes: r.summaryNotes,
+            pembinaFeedback: r.pembinaFeedback,
+            submittedByName:
+              r.submittedBy?.name || anyResp.respondentName || null,
+            reviewedByName: r.reviewedBy?.name || null,
+            submittedAt: r.submittedAt?.toISOString() || null,
+            reviewedAt: r.reviewedAt?.toISOString() || null,
+            answers: r.answers.map((ans) => ({
+              id: ans.id,
+              questionId: ans.questionId,
+              scaleValue: ans.scaleValue,
+              yesNoValue: ans.yesNoValue,
+              textAnswer: ans.textAnswer,
+            })),
+          };
+        }),
+      };
+    });
   } catch {
     // Fallback preview if database schema has not had `npx prisma db push` run yet
     serializedAssessments = ASSESSMENT_PRESET_TEMPLATES.slice(0, 2).map(
@@ -128,6 +142,7 @@ export default async function AsesmenPage() {
         category: tpl.category,
         periodYear: 2026,
         status: "AKTIF",
+        isPublic: true,
         dueDate:
           idx === 0
             ? "2026-11-30T23:59:59.000Z"

@@ -21,22 +21,16 @@ interface IncomingAnswer {
 export async function POST(request: Request) {
   try {
     const session = await getActiveSession();
-    if (!session) {
-      return NextResponse.json(
-        { error: "Sesi berakhir. Silakan masuk kembali." },
-        { status: 401 }
-      );
-    }
-
-    const { effectiveUser } = session;
+    const effectiveUser = session?.effectiveUser || null;
     const body = await request.json();
     const action = body.action as string;
 
     // 1. CREATE_ASSESSMENT (Pembina Sektoral BPS & Superadmin)
     if (action === "CREATE_ASSESSMENT") {
       if (
-        effectiveUser.role !== "PEMBINA_SEKTORAL" &&
-        effectiveUser.role !== "SUPERADMIN"
+        !effectiveUser ||
+        (effectiveUser.role !== "PEMBINA_SEKTORAL" &&
+          effectiveUser.role !== "SUPERADMIN")
       ) {
         return NextResponse.json(
           {
@@ -53,6 +47,8 @@ export async function POST(request: Request) {
         (body.category as string | undefined) || "Diagnostik Pra-EPSS";
       const periodYear = Number(body.periodYear || 2026);
       const dueDateStr = (body.dueDate as string | undefined) || "2026-12-15";
+      const isPublic =
+        typeof body.isPublic === "boolean" ? body.isPublic : true;
       const targetOpdId =
         body.targetOpdId && body.targetOpdId !== "ALL"
           ? (body.targetOpdId as string)
@@ -78,6 +74,7 @@ export async function POST(request: Request) {
           category,
           periodYear,
           status: "AKTIF",
+          ...(isPublic !== undefined ? ({ isPublic } as Record<string, unknown>) : {}),
           dueDate: new Date(`${dueDateStr}T23:59:59.000Z`),
           targetOpdId,
           createdById: effectiveUser.id,
@@ -92,12 +89,12 @@ export async function POST(request: Request) {
               weight: Number(q.weight || 1),
             })),
           },
-        },
+        } as Parameters<typeof prisma.assessment.create>[0]["data"],
       });
 
       return NextResponse.json({
         ok: true,
-        message: `Paket asesmen "${created.title}" berhasil diterbitkan untuk OPD.`,
+        message: `Paket asesmen "${created.title}" berhasil diterbitkan.`,
         assessmentId: created.id,
       });
     }
@@ -105,8 +102,9 @@ export async function POST(request: Request) {
     // 2. TOGGLE_STATUS (Pembina Sektoral BPS & Superadmin)
     if (action === "TOGGLE_STATUS") {
       if (
-        effectiveUser.role !== "PEMBINA_SEKTORAL" &&
-        effectiveUser.role !== "SUPERADMIN"
+        !effectiveUser ||
+        (effectiveUser.role !== "PEMBINA_SEKTORAL" &&
+          effectiveUser.role !== "SUPERADMIN")
       ) {
         return NextResponse.json(
           { error: "Tidak memiliki izin mengubah status asesmen." },
@@ -128,41 +126,49 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3. SUBMIT_RESPONSE (Operator OPD mengisi draf/final, atau Superadmin)
-    if (action === "SUBMIT_RESPONSE") {
-      const assessmentId = body.assessmentId as string;
-      const requestedOpdId = body.opdId as string | undefined;
-      const submitMode =
-        body.submitMode === "DRAF" ? "DRAF" : "DIKIRIM";
-      const summaryNotes =
-        (body.summaryNotes as string | undefined)?.trim() || null;
-      const answers = (body.answers as IncomingAnswer[]) || [];
-
-      // Kunci ketat: Operator OPD hanya boleh mengisi untuk OPD miliknya sendiri
-      const resolvedOpdId =
-        effectiveUser.role === "OPERATOR_OPD"
-          ? effectiveUser.opdId
-          : requestedOpdId || effectiveUser.opdId;
-
-      if (!assessmentId || !resolvedOpdId) {
-        return NextResponse.json(
-          { error: "Data asesmen dan instansi OPD tidak valid." },
-          { status: 400 }
-        );
-      }
-
+    // 2b. TOGGLE_PUBLIC (Pembina Sektoral BPS & Superadmin mengubah akses Umum vs Wajib Login)
+    if (action === "TOGGLE_PUBLIC") {
       if (
-        effectiveUser.role === "OPERATOR_OPD" &&
-        effectiveUser.opdId !== resolvedOpdId
+        !effectiveUser ||
+        (effectiveUser.role !== "PEMBINA_SEKTORAL" &&
+          effectiveUser.role !== "SUPERADMIN")
       ) {
         return NextResponse.json(
-          {
-            error:
-              "Anda hanya dapat mengisi asesmen untuk instansi OPD Anda sendiri.",
-          },
+          { error: "Tidak memiliki izin mengubah mode akses asesmen." },
           { status: 403 }
         );
       }
+
+      const assessmentId = body.assessmentId as string;
+      const isPublic = Boolean(body.isPublic);
+
+      await prisma.assessment.update({
+        where: { id: assessmentId },
+        data: { isPublic } as unknown as Parameters<
+          typeof prisma.assessment.update
+        >[0]["data"],
+      });
+
+      return NextResponse.json({
+        ok: true,
+        message: isPublic
+          ? "Asesmen kini dibuka untuk Umum (dapat diisi tanpa login)."
+          : "Asesmen kini diatur khusus Internal (wajib login aplikasi).",
+      });
+    }
+
+    // 3. SUBMIT_RESPONSE (Operator OPD yang login, Superadmin, ATAU Responden Umum tanpa login jika isPublic=true)
+    if (action === "SUBMIT_RESPONSE") {
+      const assessmentId = body.assessmentId as string;
+      const requestedOpdId = body.opdId as string | undefined;
+      const submitMode = body.submitMode === "DRAF" ? "DRAF" : "DIKIRIM";
+      const summaryNotes =
+        (body.summaryNotes as string | undefined)?.trim() || null;
+      const respondentName =
+        (body.respondentName as string | undefined)?.trim() || null;
+      const respondentNip =
+        (body.respondentNip as string | undefined)?.trim() || null;
+      const answers = (body.answers as IncomingAnswer[]) || [];
 
       const assessment = await prisma.assessment.findUnique({
         where: { id: assessmentId },
@@ -180,6 +186,45 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: "Periode pengisian asesmen ini telah ditutup oleh Pembina." },
           { status: 400 }
+        );
+      }
+
+      // Jika pengguna tidak login, pastikan asesmen memang berstatus Umum (isPublic)
+      const isPublicAssessment =
+        (assessment as unknown as { isPublic?: boolean }).isPublic ?? true;
+      if (!effectiveUser && !isPublicAssessment) {
+        return NextResponse.json(
+          {
+            error:
+              "Asesmen ini khusus internal. Silakan masuk (login) terlebih dahulu.",
+          },
+          { status: 401 }
+        );
+      }
+
+      // Tentukan OPD: Jika Operator OPD login -> kunci ke OPD miliknya; jika Umum / Superadmin -> gunakan requestedOpdId
+      const resolvedOpdId =
+        effectiveUser?.role === "OPERATOR_OPD"
+          ? effectiveUser.opdId
+          : requestedOpdId || effectiveUser?.opdId || null;
+
+      if (!assessmentId || !resolvedOpdId) {
+        return NextResponse.json(
+          { error: "Silakan pilih Instansi Perangkat Daerah (OPD) Anda." },
+          { status: 400 }
+        );
+      }
+
+      if (
+        effectiveUser?.role === "OPERATOR_OPD" &&
+        effectiveUser.opdId !== resolvedOpdId
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Anda hanya dapat mengisi asesmen untuk instansi OPD Anda sendiri.",
+          },
+          { status: 403 }
         );
       }
 
@@ -211,6 +256,13 @@ export async function POST(request: Request) {
           : 3.0;
       const readinessPct = Math.round((readinessScore / 5) * 100);
 
+      const extraNotesWithRespondent =
+        !effectiveUser && respondentName
+          ? `[Pengisi Umum: ${respondentName}${
+              respondentNip ? ` — ${respondentNip}` : ""
+            }] ${summaryNotes || ""}`.trim()
+          : summaryNotes;
+
       const responseRecord = await prisma.assessmentResponse.upsert({
         where: {
           assessmentId_opdId: {
@@ -219,21 +271,21 @@ export async function POST(request: Request) {
           },
         },
         update: {
-          submittedById: effectiveUser.id,
+          submittedById: effectiveUser?.id || null,
           status: submitMode,
           readinessScore,
           readinessPct,
-          summaryNotes,
+          summaryNotes: extraNotesWithRespondent,
           submittedAt: submitMode === "DIKIRIM" ? new Date() : undefined,
         },
         create: {
           assessmentId,
           opdId: resolvedOpdId,
-          submittedById: effectiveUser.id,
+          submittedById: effectiveUser?.id || null,
           status: submitMode,
           readinessScore,
           readinessPct,
-          summaryNotes,
+          summaryNotes: extraNotesWithRespondent,
           submittedAt: submitMode === "DIKIRIM" ? new Date() : null,
         },
       });
@@ -271,9 +323,11 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         ok: true,
+        readinessScore,
+        readinessPct,
         message:
           submitMode === "DIKIRIM"
-            ? "Jawaban asesmen berhasil dikirim ke Pembina Sektoral BPS."
+            ? "Jawaban asesmen berhasil dikirim ke Pembina Sektoral BPS Kabupaten Berau."
             : "Draf jawaban asesmen berhasil disimpan.",
       });
     }
@@ -281,8 +335,9 @@ export async function POST(request: Request) {
     // 4. REVIEW_RESPONSE (Pembina Sektoral BPS & Superadmin memberikan umpan balik)
     if (action === "REVIEW_RESPONSE") {
       if (
-        effectiveUser.role !== "PEMBINA_SEKTORAL" &&
-        effectiveUser.role !== "SUPERADMIN"
+        !effectiveUser ||
+        (effectiveUser.role !== "PEMBINA_SEKTORAL" &&
+          effectiveUser.role !== "SUPERADMIN")
       ) {
         return NextResponse.json(
           {
@@ -336,4 +391,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

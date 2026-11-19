@@ -22,6 +22,8 @@ import {
   Award,
   ChevronRight,
   Search,
+  Globe,
+  Link2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -76,6 +78,7 @@ export interface SerializedAssessment {
   category: string;
   periodYear: number;
   status: string; // AKTIF | DITUTUP
+  isPublic?: boolean;
   dueDate: string;
   targetOpdId: string | null;
   targetOpdName: string | null;
@@ -169,6 +172,8 @@ export function AsesmenClient({
   );
   const [newDueDate, setNewDueDate] = React.useState("2026-12-20");
   const [newTargetOpdId, setNewTargetOpdId] = React.useState("ALL");
+  const [newIsPublic, setNewIsPublic] = React.useState(true);
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
   const [builderQuestions, setBuilderQuestions] = React.useState<
     PresetQuestionItem[]
   >(ASSESSMENT_PRESET_TEMPLATES[0].questions);
@@ -287,6 +292,7 @@ export function AsesmenClient({
           periodYear: 2026,
           dueDate: newDueDate,
           targetOpdId: newTargetOpdId,
+          isPublic: newIsPublic,
           questions: validQuestions,
         }),
       });
@@ -321,6 +327,29 @@ export function AsesmenClient({
       }),
     });
     router.refresh();
+  }
+
+  async function handleTogglePublic(assessment: SerializedAssessment) {
+    const currentIsPublic = assessment.isPublic ?? true;
+    await fetch("/api/asesmen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "TOGGLE_PUBLIC",
+        assessmentId: assessment.id,
+        isPublic: !currentIsPublic,
+      }),
+    });
+    router.refresh();
+  }
+
+  function handleCopyPublicLink(assessmentId: string) {
+    const url = `${window.location.origin}/asesmen-publik?id=${encodeURIComponent(
+      assessmentId
+    )}`;
+    navigator.clipboard?.writeText(url);
+    setCopiedId(assessmentId);
+    setTimeout(() => setCopiedId(null), 2000);
   }
 
   async function handleSaveOrSubmitAnswers(submitMode: "DRAF" | "DIKIRIM") {
@@ -594,13 +623,26 @@ export function AsesmenClient({
                 <div>
                   {/* Baris Lencana Atas */}
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Badge
                         variant={
                           item.status === "AKTIF" ? "teal" : "secondary"
                         }
                       >
                         {item.status === "AKTIF" ? "Aktif Dibuka" : "Ditutup"}
+                      </Badge>
+                      <Badge
+                        variant={
+                          (item.isPublic ?? true) ? "success" : "outline"
+                        }
+                        className="inline-flex items-center gap-1"
+                      >
+                        <Globe className="h-3 w-3" />
+                        <span>
+                          {(item.isPublic ?? true)
+                            ? "Umum (Tanpa Login)"
+                            : "Wajib Login"}
+                        </span>
                       </Badge>
                       <Badge variant="outline">{item.category}</Badge>
                     </div>
@@ -707,7 +749,7 @@ export function AsesmenClient({
                     </>
                   ) : (
                     <>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => handleToggleStatus(item)}
@@ -730,6 +772,36 @@ export function AsesmenClient({
                             </>
                           )}
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePublic(item)}
+                          className="inline-flex h-[34px] items-center gap-1 rounded-[7px] border border-[#e1e8f0] bg-[#f8fafc] px-2.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                          title="Ubah Akses Umum (Tanpa Login) / Wajib Login"
+                        >
+                          <Globe className="h-3 w-3 text-[#087f80]" />
+                          <span>
+                            {(item.isPublic ?? true)
+                              ? "Set Wajib Login"
+                              : "Set Jadi Umum"}
+                          </span>
+                        </button>
+
+                        {(item.isPublic ?? true) && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPublicLink(item.id)}
+                            className="inline-flex h-[34px] items-center gap-1 rounded-[7px] border border-teal-200 bg-teal-50/70 px-2.5 text-[11px] font-semibold text-[#087f80] hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300"
+                            title="Salin Tautan Asesmen Umum (Tanpa Login)"
+                          >
+                            <Link2 className="h-3 w-3" />
+                            <span>
+                              {copiedId === item.id
+                                ? "Tautan Disalin!"
+                                : "Link Umum"}
+                            </span>
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -1462,6 +1534,26 @@ export function AsesmenClient({
                     onChange={(e) => setNewDueDate(e.target.value)}
                     className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] px-3 dark:border-slate-700 dark:bg-slate-800"
                   />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#142b45] dark:text-white">
+                    Mode Akses Pengisian Asesmen
+                  </label>
+                  <select
+                    value={newIsPublic ? "PUBLIC" : "PRIVATE"}
+                    onChange={(e) =>
+                      setNewIsPublic(e.target.value === "PUBLIC")
+                    }
+                    className="mt-1 h-[40px] w-full rounded-[8px] border border-[#e1e8f0] bg-white px-3 font-semibold text-[#087f80] dark:border-slate-700 dark:bg-slate-800 dark:text-teal-300"
+                  >
+                    <option value="PUBLIC">
+                      Umum — Dapat Diisi Tanpa Login Aplikasi
+                    </option>
+                    <option value="PRIVATE">
+                      Internal — Wajib Login Akun Operator OPD
+                    </option>
+                  </select>
                 </div>
 
                 <div className="sm:col-span-2">

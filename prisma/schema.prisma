@@ -197,6 +197,7 @@ model Assessment {
   category    String               @default("Diagnostik Pra-EPSS") // Diagnostik Pra-EPSS | Kesiapan Metadata & Romantik | Evaluasi Pasca-Pembinaan
   periodYear  Int                  @default(2026)
   status      String               @default("AKTIF") // DRAF | AKTIF | DITUTUP
+  isPublic    Boolean              @default(true)    // true = Umum (Dapat diisi tanpa login) | false = Internal (Wajib Login)
   dueDate     DateTime
   targetOpdId String?              // null = Semua OPD, atau ID OPD tertentu
   targetOpd   Opd?                 @relation("TargetOpd", fields: [targetOpdId], references: [id], onDelete: SetNull)
@@ -230,6 +231,8 @@ model AssessmentResponse {
   opd             Opd                @relation(fields: [opdId], references: [id], onDelete: Cascade)
   submittedById   String?
   submittedBy     User?              @relation("ResponseSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  respondentName  String?            // Nama pengisi jika diisi secara Umum (tanpa login)
+  respondentNip   String?            // NIP / Jabatan pengisi jika diisi secara Umum
   status          String             @default("DRAF") // DRAF | DIKIRIM | DIREVIU
   readinessScore  Float?             // Skor rata-rata kesiapan skala 1.00 - 5.00
   readinessPct    Int?               // Persentase kesiapan 0 - 100%

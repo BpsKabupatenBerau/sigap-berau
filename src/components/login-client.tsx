@@ -1,11 +1,14 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   Library,
   ClipboardCheck,
+  ClipboardList,
+  Globe,
   ShieldCheck,
   Mail,
   Eye,
@@ -403,6 +406,28 @@ export function LoginClient() {
               <ArrowRight className="h-[18px] w-[18px]" />
             </button>
           </form>
+
+          {/* Akses Cepat Asesmen Umum Tanpa Login */}
+          <div className="mt-4 rounded-[10px] border border-teal-200 bg-teal-50/70 p-3.5 dark:border-teal-800 dark:bg-teal-950/30">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#087f80] dark:text-teal-300">
+                  <Globe className="h-3.5 w-3.5 shrink-0" />
+                  <span>Asesmen Kesiapan OPD (Tanpa Login)</span>
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300">
+                  Isi kuesioner asesmen kesiapan statistik sektoral secara langsung tanpa akun.
+                </p>
+              </div>
+              <Link
+                href="/asesmen-publik"
+                className="inline-flex h-[36px] shrink-0 items-center gap-1.5 rounded-[8px] bg-[#087f80] px-3.5 text-[12px] font-semibold text-white transition hover:bg-[#066667]"
+              >
+                <ClipboardList className="h-3.5 w-3.5" />
+                <span>Isi Asesmen</span>
+              </Link>
+            </div>
+          </div>
 
           {/* Informasi akses & Akun Simulasi Cepat (4:3123) */}
           <div
